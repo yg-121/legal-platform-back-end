@@ -3,9 +3,18 @@ import Case from '../models/Case.js';
 export const createCase = async (req, res) => {
     try {
         const { description } = req.body;
-        if (!description) return res.status(400).json({ message: "Description is required" });
+        const file_id = req.file ? req.file.path : null;
+        const client = req.user.id;
 
-        const newCase = new Case({ client: req.user.id, description });
+        if (!description) {
+            return res.status(400).json({ message: "Description is required" });
+        }
+
+        const newCase = new Case({
+            client,
+            description,
+            file_id
+        });
         await newCase.save();
 
         res.status(201).json(newCase);
