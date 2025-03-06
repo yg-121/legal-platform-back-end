@@ -2,24 +2,38 @@ import Bid from '../models/Bid.js';
 import Case from '../models/Case.js';
 import { sendNotification } from '../utils/notify.js';
 
-
-export const placeBid = async (req, res) => {
+export const createBid = async (req, res) => {
     try {
-        const { caseId, bidAmount } = req.body;
-        if (!caseId || !bidAmount) return res.status(400).json({ message: "Case ID and bid amount are required" });
+        const { case: caseId, amount, comment } = req.body;
+        const lawyer = req.user.id;
+
+        if (!caseId || !amount) {
+            return res.status(400).json({ message: "Case ID and amount are required" });
+        }
 
         const caseExists = await Case.findById(caseId);
-        if (!caseExists) return res.status(404).json({ message: "Case not found" });
+        if (!caseExists) {
+            return res.status(404).json({ message: "Case not found" });
+        }
+        if (caseExists.status !== 'Posted') {
+            return res.status(400).json({ message: "Cannot bid on a non-posted case" });
+        }
 
-        const newBid = new Bid({ case: caseId, lawyer: req.user.id, bidAmount });
-        await newBid.save();
+        const bid = new Bid({
+            lawyer,
+            case: caseId,
+            amount,
+            comment
+        });
+        await bid.save();
 
-        await sendNotification(caseExists.client, `A lawyer bid ${bidAmount} on your case (ID: ${caseId})`, 'Bid');
+        const clientId = caseExists.client;
+        const notificationMessage = `A lawyer has bid ${amount} ETB on your case: "${caseExists.description}"`;
+        await sendNotification(clientId, notificationMessage, 'Bid');
 
-
-        res.status(201).json(newBid);
+        res.status(201).json(bid);
     } catch (error) {
-        console.error('❌ Bid Placement Error:', error.message);
+        console.error('❌ Bid Creation Error:', error.message);
         res.status(500).json({ message: "Server Error", error: error.message });
     }
 };
@@ -30,30 +44,47 @@ export const getCaseBids = async (req, res) => {
         const bids = await Bid.find({ case: caseId }).populate('lawyer', 'username email');
         res.json(bids);
     } catch (error) {
-        console.error('❌ Fetch Bids Error:', error.message);
+        console.error('❌ Fetch Case Bids Error:', error.message);
         res.status(500).json({ message: "Server Error", error: error.message });
     }
 };
-// import Bid from '../models/Bid.js';
-// import Case from '../models/Case.js';
-// import { sendNotification } from '../utils/notify.js';
 
-// export const placeBid = async (req, res) => {
-//     try {
-//         const { caseId, bidAmount } = req.body;
-//         if (!caseId || !bidAmount) return res.status(400).json({ message: "Case ID and bid amount are required" });
+export const acceptBid = async (req, res) => {
+    try {
+        const { bidId } = req.params;
+        const clientId = req.user.id;
 
-//         const caseExists = await Case.findById(caseId);
-//         if (!caseExists) return res.status(404).json({ message: "Case not found" });
+        const bid = await Bid.findById(bidId).populate('case');
+        if (!bid) {
+            return res.status(404).json({ message: "Bid not found" });
+        }
 
-//         const newBid = new Bid({ case: caseId, lawyer: req.user.id, bidAmount });
-//         await newBid.save();
+        const caseData = bid.case;
+        if (caseData.client.toString() !== clientId) {
+            return res.status(403).json({ message: "You can only accept bids on your own cases" });
+        }
+        if (caseData.status !== 'Posted') {
+            return res.status(400).json({ message: "Case is no longer open for bids" });
+        }
 
-//         await sendNotification(caseExists.client, `A lawyer bid ${bidAmount} on your case (ID: ${caseId})`, 'Bid');
+        // Update bid status
+        bid.status = 'Accepted';
+        await bid.save();
 
-//         res.status(201).json(newBid);
-//     } catch (error) {
-//         console.error('❌ Bid Placement Error:', error.message);
-//         res.status(500).json({ message: "Server Error", error: error.message });
-//     }
-// };
+        // Update case with winning bid and assigned lawyer
+        caseData.status = 'Assigned';
+        caseData.winning_bid = bidId;
+        caseData.assigned_lawyer = bid.lawyer;
+        await caseData.save();
+
+        // Notify the lawyer
+        const lawyerId = bid.lawyer;
+        const notificationMessage = `Your bid of ${bid.amount} ETB on case "${caseData.description}" has been accepted!`;
+        await sendNotification(lawyerId, notificationMessage, 'BidAccepted');
+
+        res.json({ message: "Bid accepted", bid, case: caseData });
+    } catch (error) {
+        console.error('❌ Bid Acceptance Error:', error.message);
+        res.status(500).json({ message: "Server Error", error: error.message });
+    }
+};

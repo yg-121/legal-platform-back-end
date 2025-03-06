@@ -12,7 +12,7 @@ const NotificationSchema = new mongoose.Schema({
     },
     type: { 
         type: String, 
-        enum: ['Bid', 'Appointment', 'Chat'], 
+        enum: ['Bid', 'Appointment', 'Chat', 'BidAccepted'], // Added 'BidAccepted'
         required: true 
     },
     status: { 

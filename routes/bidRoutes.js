@@ -1,10 +1,11 @@
 import express from 'express';
-import { placeBid, getCaseBids } from '../controllers/bidController.js';
 import authMiddleware from '../middlewares/authMiddleware.js';
+import { createBid, getCaseBids, acceptBid } from '../controllers/bidController.js';
 
 const router = express.Router();
 
-router.post('/', authMiddleware(['Lawyer']), placeBid);
-router.get('/:caseId', authMiddleware(), getCaseBids);
+router.post('/', authMiddleware(['Lawyer']), createBid);
+router.get('/case/:caseId', authMiddleware(['Client', 'Admin']), getCaseBids);
+router.post('/accept/:bidId', authMiddleware(['Client']), acceptBid);
 
 export default router;
