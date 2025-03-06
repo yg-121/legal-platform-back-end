@@ -19,8 +19,16 @@ export const registerUser = async (req, res) => {
             return res.status(400).json({ message: "Username, email, password, and role are required" });
         }
 
-        if (role === 'Lawyer' && !license_file) {
-            return res.status(400).json({ message: "License file upload is required for Lawyers" });
+        if (role === 'Lawyer') {
+            if (!license_file) {
+                return res.status(400).json({ message: "License file upload is required for Lawyers" });
+            }
+            if (!specialization) {
+                return res.status(400).json({ message: "Specialization is required for Lawyers" });
+            }
+            if (!location) {
+                return res.status(400).json({ message: "Location is required for Lawyers" });
+            }
         }
 
         const userExists = await User.findOne({ email });
@@ -52,7 +60,7 @@ export const registerUser = async (req, res) => {
     }
 };
 
-export const registerUserWithUpload = [upload, registerUser]; // Fixed: Use upload directly
+export const registerUserWithUpload = [upload, registerUser];
 
 export const loginUser = async (req, res) => {
     try {
