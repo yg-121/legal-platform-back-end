@@ -1,6 +1,6 @@
 import User from '../models/User.js';
 import authMiddleware from '../middlewares/authMiddleware.js';
-import upload from '../utils/upload.js'; // Reusing upload, will adjust
+import profileUpload from '../utils/profileUpload.js'; // Correct import for profile_photo
 
 export const approveLawyer = async (req, res) => {
     try {
@@ -63,4 +63,4 @@ export const updateProfile = async (req, res) => {
     }
 };
 
-export const updateProfileWithUpload = [upload.single('profile_photo'), updateProfile];
+export const updateProfileWithUpload = [profileUpload, updateProfile];

@@ -12,6 +12,8 @@ const generateToken = (user) => {
 
 export const registerUser = async (req, res) => {
     try {
+        // console.log('Request Body:', req.body); // Debug: Log incoming body
+        // console.log('File:', req.file); // Debug: Log uploaded file
         const { username, email, password, role, phone, specialization, location } = req.body;
         const license_file = req.file ? req.file.path : null;
 
