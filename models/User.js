@@ -15,7 +15,10 @@ const UserSchema = new mongoose.Schema({
         type: String, 
         enum: ['Pending', 'Active', 'Rejected'], 
         default: function() { return this.role === 'Lawyer' ? 'Pending' : 'Active'; }
-    }
+    },
+    ratings: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Rating' }],
+    averageRating: { type: Number, default: 0 }
+    
 }, { timestamps: true });
 
 UserSchema.pre('save', async function (next) {
