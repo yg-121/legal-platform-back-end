@@ -10,6 +10,12 @@ export const createBid = async (req, res) => {
         if (!caseId || !amount) {
             return res.status(400).json({ message: "Case ID and amount are required" });
         }
+        if (isNaN(amount) || amount <= 0) {
+            return res.status(400).json({ message: "Amount must be a positive number" });
+        }
+        if (comment && comment.length > 200) {
+            return res.status(400).json({ message: "Comment must be under 200 characters" });
+        }
 
         const caseExists = await Case.findById(caseId);
         if (!caseExists) {
@@ -18,23 +24,20 @@ export const createBid = async (req, res) => {
         if (caseExists.status !== 'Posted') {
             return res.status(400).json({ message: "Cannot bid on a non-posted case" });
         }
+        if (await Bid.findOne({ lawyer, case: caseId })) {
+            return res.status(400).json({ message: "You’ve already bid on this case" });
+        }
 
-        const bid = new Bid({
-            lawyer,
-            case: caseId,
-            amount,
-            comment
-        });
+        const bid = new Bid({ lawyer, case: caseId, amount, comment });
         await bid.save();
 
         const clientId = caseExists.client;
-        const notificationMessage = `A lawyer has bid ${amount} ETB on your case: "${caseExists.description}"`;
-        await sendNotification(clientId, notificationMessage, 'Bid');
+        await sendNotification(clientId, `A lawyer has bid ${amount} ETB on your case: "${caseExists.description}"`, 'Bid');
 
         res.status(201).json(bid);
     } catch (error) {
         console.error('❌ Bid Creation Error:', error.message);
-        res.status(500).json({ message: "Server Error", error: error.message });
+        res.status(500).json({ message: "Failed to create bid", error: error.message });
     }
 };
 
