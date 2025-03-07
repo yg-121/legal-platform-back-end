@@ -1,10 +1,11 @@
 import express from 'express';
-import { scheduleAppointment, sendChatMessage } from '../controllers/appointmentController.js';
 import authMiddleware from '../middlewares/authMiddleware.js';
+import { createAppointment, getAppointments, confirmAppointment } from '../controllers/appointmentController.js';
 
 const router = express.Router();
 
-router.post('/appointments', authMiddleware(['Client']), scheduleAppointment);
-router.post('/chats', authMiddleware(), sendChatMessage);
+router.post('/', authMiddleware(['Client']), createAppointment);
+router.get('/', authMiddleware(['Client', 'Lawyer']), getAppointments);
+router.patch('/:id/confirm', authMiddleware(['Lawyer']), confirmAppointment);
 
 export default router;
