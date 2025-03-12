@@ -1,25 +1,26 @@
 import User from '../models/User.js';
+import Audit from '../models/Audit.js'; // Add this
 import authMiddleware from '../middlewares/authMiddleware.js';
-import profileUpload from '../utils/profileUpload.js'; // Your Multer setup
+import profileUpload from '../utils/profileUpload.js';
 
-// Existing: Approve/Reject Lawyer (Updated to PUT)
 export const approveLawyer = async (req, res) => {
   try {
     const { lawyerId } = req.body;
-    if (!lawyerId) {
-      return res.status(400).json({ message: 'Lawyer ID is required' });
-    }
+    if (!lawyerId) return res.status(400).json({ message: 'Lawyer ID is required' });
 
     const lawyer = await User.findById(lawyerId);
-    if (!lawyer || lawyer.role !== 'Lawyer') {
-      return res.status(404).json({ message: 'Lawyer not found' });
-    }
-    if (lawyer.status !== 'Pending') {
-      return res.status(400).json({ message: 'Lawyer is not pending approval' });
-    }
+    if (!lawyer || lawyer.role !== 'Lawyer') return res.status(404).json({ message: 'Lawyer not found' });
+    if (lawyer.status !== 'Pending') return res.status(400).json({ message: 'Lawyer is not pending approval' });
 
     lawyer.status = 'Active';
     await lawyer.save();
+
+    // Audit log
+    await new Audit({
+      admin: req.user.id,
+      action: 'approve_lawyer',
+      target: lawyerId,
+    }).save();
 
     res.json({
       message: 'Lawyer approved',
@@ -41,20 +42,21 @@ export const approveLawyer = async (req, res) => {
 export const rejectLawyer = async (req, res) => {
   try {
     const { lawyerId } = req.body;
-    if (!lawyerId) {
-      return res.status(400).json({ message: 'Lawyer ID is required' });
-    }
+    if (!lawyerId) return res.status(400).json({ message: 'Lawyer ID is required' });
 
     const lawyer = await User.findById(lawyerId);
-    if (!lawyer || lawyer.role !== 'Lawyer') {
-      return res.status(404).json({ message: 'Lawyer not found' });
-    }
-    if (lawyer.status !== 'Pending') {
-      return res.status(400).json({ message: 'Lawyer is not pending approval' });
-    }
+    if (!lawyer || lawyer.role !== 'Lawyer') return res.status(404).json({ message: 'Lawyer not found' });
+    if (lawyer.status !== 'Pending') return res.status(400).json({ message: 'Lawyer is not pending approval' });
 
     lawyer.status = 'Rejected';
     await lawyer.save();
+
+    // Audit log
+    await new Audit({
+      admin: req.user.id,
+      action: 'reject_lawyer',
+      target: lawyerId,
+    }).save();
 
     res.json({
       message: 'Lawyer rejected',
@@ -73,7 +75,6 @@ export const rejectLawyer = async (req, res) => {
   }
 };
 
-// Existing: Update Profile (for Lawyers)
 export const updateProfile = async (req, res) => {
   try {
     const { phone, password } = req.body;
@@ -107,22 +108,26 @@ export const updateProfile = async (req, res) => {
 
 export const updateProfileWithUpload = [profileUpload, updateProfile];
 
-// New: Update Admin Profile
 export const updateAdminProfile = async (req, res) => {
   try {
     const { username, email, phone } = req.body;
     const profile_photo = req.file ? req.file.path : null;
     const user = await User.findById(req.user.id);
 
-    if (!user || user.role !== 'Admin') {
-      return res.status(403).json({ message: 'Admin access required' });
-    }
+    if (!user || user.role !== 'Admin') return res.status(403).json({ message: 'Admin access required' });
 
     if (username) user.username = username;
     if (email) user.email = email;
     if (phone) user.phone = phone;
     if (profile_photo) user.profile_photo = profile_photo;
     await user.save();
+
+    // Audit log
+    await new Audit({
+      admin: req.user.id,
+      action: 'update_profile',
+      target: req.user.id,
+    }).save();
 
     res.json({
       message: 'Admin profile updated',
@@ -143,24 +148,24 @@ export const updateAdminProfile = async (req, res) => {
 
 export const updateAdminProfileWithUpload = [profileUpload, updateAdminProfile];
 
-// New: Change Admin Password
 export const changeAdminPassword = async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
     const user = await User.findById(req.user.id);
 
-    if (!user || user.role !== 'Admin') {
-      return res.status(403).json({ message: 'Admin access required' });
-    }
-    if (!currentPassword || !newPassword) {
-      return res.status(400).json({ message: 'Current and new passwords are required' });
-    }
-    if (!(await user.comparePassword(currentPassword))) {
-      return res.status(401).json({ message: 'Current password is incorrect' });
-    }
+    if (!user || user.role !== 'Admin') return res.status(403).json({ message: 'Admin access required' });
+    if (!currentPassword || !newPassword) return res.status(400).json({ message: 'Current and new passwords are required' });
+    if (!(await user.comparePassword(currentPassword))) return res.status(401).json({ message: 'Current password is incorrect' });
 
-    user.password = newPassword; // Pre-save hook hashes it
+    user.password = newPassword;
     await user.save();
+
+    // Audit log
+    await new Audit({
+      admin: req.user.id,
+      action: 'change_password',
+      target: req.user.id,
+    }).save();
 
     res.json({ message: 'Password updated successfully' });
   } catch (error) {
@@ -169,7 +174,6 @@ export const changeAdminPassword = async (req, res) => {
   }
 };
 
-// New: Get All Users
 export const getAllUsers = async (req, res) => {
   try {
     const users = await User.find().select('-password');
@@ -180,7 +184,6 @@ export const getAllUsers = async (req, res) => {
   }
 };
 
-// New: Filter Users
 export const filterUsers = async (req, res) => {
   try {
     const { role, status } = req.query;
@@ -196,7 +199,6 @@ export const filterUsers = async (req, res) => {
   }
 };
 
-// New: Get Pending Lawyers
 export const getPendingLawyers = async (req, res) => {
   try {
     const pendingLawyers = await User.find({ role: 'Lawyer', status: 'Pending' }).select('-password');
@@ -207,19 +209,22 @@ export const getPendingLawyers = async (req, res) => {
   }
 };
 
-// New: Delete User
 export const deleteUser = async (req, res) => {
   try {
     const { userId } = req.params;
     const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-    if (user.role === 'Admin') {
-      return res.status(403).json({ message: 'Cannot delete an admin' });
-    }
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (user.role === 'Admin') return res.status(403).json({ message: 'Cannot delete an admin' });
 
     await User.deleteOne({ _id: userId });
+
+    // Audit log
+    await new Audit({
+      admin: req.user.id,
+      action: 'delete_user',
+      target: userId,
+    }).save();
+
     res.json({ message: 'User deleted successfully' });
   } catch (error) {
     console.error('❌ Delete User Error:', error.message);
@@ -227,28 +232,30 @@ export const deleteUser = async (req, res) => {
   }
 };
 
-// New: Add Another Admin
 export const addAdmin = async (req, res) => {
   try {
     const { username, email, password, phone } = req.body;
-    if (!username || !email || !password) {
-      return res.status(400).json({ message: 'Username, email, and password are required' });
-    }
+    if (!username || !email || !password) return res.status(400).json({ message: 'Username, email, and password are required' });
 
     const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({ message: 'Email already exists' });
-    }
+    if (existingUser) return res.status(400).json({ message: 'Email already exists' });
 
     const newAdmin = new User({
       username,
       email,
-      password, // Pre-save hook hashes it
+      password,
       role: 'Admin',
       status: 'Active',
       phone,
     });
     await newAdmin.save();
+
+    // Audit log
+    await new Audit({
+      admin: req.user.id,
+      action: 'add_admin',
+      target: newAdmin._id,
+    }).save();
 
     res.json({
       message: 'Admin added successfully',
