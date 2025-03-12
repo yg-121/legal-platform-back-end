@@ -77,7 +77,7 @@ export const loginUser = async (req, res) => {
         }
 
         if (user.role === 'Lawyer' && user.status !== 'Active') {
-            return res.status(403).json({ message: `Account is ${user.status}. Contact an Admin.` });
+            return res.status(403).json({ message: `Account is ${user.status}.please wait, you will be approved very soon.` });
         }
 
         res.json({ 
