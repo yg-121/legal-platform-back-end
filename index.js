@@ -11,10 +11,18 @@ import notificationRoutes from './routes/notificationRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
 import ratingRoutes from './routes/ratingRoutes.js';
 import auditRoutes from './routes/auditRoutes.js';
+import path from 'path';
+import { fileURLToPath } from 'url'; // Add this import
 
 dotenv.config();
 connectDB();
+
 const app = express();
+
+// Get __dirname equivalent in ES Modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 app.use(cors({ origin: 'http://localhost:5173' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -28,6 +36,9 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/chats', chatRoutes);
 app.use('/api/ratings', ratingRoutes);
 app.use('/api', auditRoutes);
+
+// Serve static files from 'uploads' directory
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 app.get('/', (req, res) => {
     res.json({ message: "🚀 Server is running!" });

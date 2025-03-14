@@ -99,8 +99,12 @@ export const loginUser = async (req, res) => {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
-    if (user.role === 'Lawyer' && user.status !== 'Active') {
+    if (user.role === 'Lawyer' && user.status === 'Pending') {
       return res.status(403).json({ message: `Account is ${user.status}. Please wait, you will be approved very soon.` });
+    }
+
+    if (user.role === 'Lawyer' && user.status === 'Rejected') {
+      return res.status(403).json({ message: `Account is ${user.status}. Please register again,with legal license` });
     }
 
     res.json({ 

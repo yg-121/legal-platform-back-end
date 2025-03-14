@@ -1,7 +1,33 @@
 import User from '../models/User.js';
-import Audit from '../models/Audit.js'; // Add this
+import Audit from '../models/Audit.js'; 
 import authMiddleware from '../middlewares/authMiddleware.js';
 import profileUpload from '../utils/profileUpload.js';
+
+
+export const getAdminProfile = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('-password');
+    if (!user) {
+      return res.status(404).json({ message: 'Admin not found' });
+    }
+    if (user.role !== 'Admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
+    res.json({
+      _id: user._id,
+      username: user.username,
+      email: user.email,
+      phone: user.phone,
+      role: user.role,
+      profile_photo: user.profile_photo,
+      status: user.status,
+    });
+  } catch (error) {
+    console.error('❌ Get Admin Profile Error:', error.message);
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
 
 export const approveLawyer = async (req, res) => {
   try {

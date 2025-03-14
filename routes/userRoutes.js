@@ -11,6 +11,7 @@ import {
   getPendingLawyers,
   deleteUser,
   addAdmin,
+  getAdminProfile,
 } from '../controllers/userController.js';
 
 const router = express.Router();
@@ -22,6 +23,7 @@ router.put('/profile', authMiddleware(['Lawyer']), updateProfileWithUpload);
 
 // New Admin Routes
 router.put('/admin/profile', authMiddleware(['Admin']), updateAdminProfileWithUpload);
+router.get('/admin/profile', authMiddleware(['Admin']), getAdminProfile);
 router.put('/admin/password', authMiddleware(['Admin']), changeAdminPassword);
 router.get('/', authMiddleware(['Admin']), getAllUsers);
 router.get('/filter', authMiddleware(['Admin']), filterUsers);
