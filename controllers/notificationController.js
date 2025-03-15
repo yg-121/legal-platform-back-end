@@ -1,6 +1,6 @@
-import Notification from '../models/Notification.js';
-import User from '../models/User.js';
-import Case from '../models/Case.js';
+import Notification from "../models/Notification.js";
+import User from "../models/User.js";
+import Case from "../models/Case.js";
 
 export const getNotifications = async (req, res) => {
   try {
@@ -12,22 +12,24 @@ export const getNotifications = async (req, res) => {
 
     // Calculate counts
     const totalUsers = await User.countDocuments();
-    const lawyers = await User.countDocuments({ role: 'Lawyer' });
-    const pendingLawyers = await User.countDocuments({ role: 'Lawyer', status: 'Pending' });
-    const cases = await Case.countDocuments();
+    const lawyers = await User.countDocuments({ role: "Lawyer" });
+    const pendingLawyers = await User.countDocuments({ role: "Lawyer", status: "Pending" });
+    const totalCases = await Case.countDocuments(); // Rename to totalCases for clarity
+
+    console.log("✅ Fetched Stats:", { totalUsers, lawyers, pendingLawyers, totalCases }); // Debug log
 
     res.json({
-      message: 'Notifications fetched',
+      message: "Notifications fetched",
       notifications,
-      counts: {
+      counts: { // Change 'counts' to 'stats'
         totalUsers,
         lawyers,
         pendingLawyers,
-        cases,
+        totalCases, // Change 'cases' to 'totalCases'
       },
     });
   } catch (error) {
-    console.error('❌ Fetch Notifications Error:', error.message);
-    res.status(500).json({ message: 'Server Error', error: error.message });
+    console.error("❌ Fetch Notifications Error:", error.message);
+    res.status(500).json({ message: "Server Error", error: error.message });
   }
 };
