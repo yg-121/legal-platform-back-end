@@ -1,6 +1,7 @@
+import dotenv from 'dotenv';
+dotenv.config();
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import connectDB from './config/db.js';
 import authRoutes from './routes/authRoutes.js';
 import caseRoutes from './routes/caseRoutes.js';
@@ -10,11 +11,12 @@ import userRoutes from './routes/userRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
 import ratingRoutes from './routes/ratingRoutes.js';
-import auditRoutes from './routes/auditRoutes.js';
+import auditRoutes from './routes/auditRoutes.js'
+// import authMiddleware from '../middlewares/authMiddleware.js';
 import path from 'path';
 import { fileURLToPath } from 'url'; // Add this import
 
-dotenv.config();
+
 connectDB();
 
 const app = express();
@@ -26,7 +28,7 @@ const __dirname = path.dirname(__filename);
 app.use(cors({ origin: 'http://localhost:5173' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
+// app.use(authMiddleware);
 app.use('/api/auth', authRoutes);
 app.use('/api/cases', caseRoutes);
 app.use('/api/bids', bidRoutes);
