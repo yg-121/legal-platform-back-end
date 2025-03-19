@@ -2,7 +2,7 @@ import User from '../models/User.js';
 import Audit from '../models/Audit.js'; 
 import authMiddleware from '../middlewares/authMiddleware.js';
 import profileUpload from '../utils/profileUpload.js';
-
+import nodemailer from 'nodemailer'; // Add this import
 
 export const getAdminProfile = async (req, res) => {
   try {
@@ -48,6 +48,25 @@ export const approveLawyer = async (req, res) => {
       target: lawyerId,
     }).save();
 
+    // Notify lawyer via email
+    const transporter = nodemailer.createTransport({
+      service: "Gmail",
+      auth: {
+        user: process.env.EMAIL_HOST_USER,
+        pass: process.env.EMAIL_HOST_PASSWORD,
+      },
+    });
+
+    const mailOptions = {
+      to: lawyer.email,
+      from: process.env.EMAIL_HOST_USER,
+      subject: "Your Lawyer Account Has Been Approved",
+      text: `Dear ${lawyer.username},\n\nYour lawyer account has been approved. You can now log in: ${process.env.FRONTEND_URL}/login\n\nWelcome to the platform!`,
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log(`✅ Approval email sent to ${lawyer.email}`);
+
     res.json({
       message: 'Lawyer approved',
       lawyer: {
@@ -84,6 +103,25 @@ export const rejectLawyer = async (req, res) => {
       target: lawyerId,
     }).save();
 
+    // Notify lawyer via email
+    const transporter = nodemailer.createTransport({
+      service: "Gmail",
+      auth: {
+        user: process.env.EMAIL_HOST_USER,
+        pass: process.env.EMAIL_HOST_PASSWORD,
+      },
+    });
+
+    const mailOptions = {
+      to: lawyer.email,
+      from: process.env.EMAIL_HOST_USER,
+      subject: "Your Lawyer Account Registration",
+      text: `Dear ${lawyer.username},\n\nYour lawyer account registration was reviewed but not approved at this time. For more information, contact support.\n\nThank you for your interest.`,
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log(`✅ Rejection email sent to ${lawyer.email}`);
+
     res.json({
       message: 'Lawyer rejected',
       lawyer: {
@@ -101,6 +139,7 @@ export const rejectLawyer = async (req, res) => {
   }
 };
 
+// Rest of your code (updateProfile, updateAdminProfile, etc.) remains unchanged
 export const updateProfile = async (req, res) => {
   try {
     const { phone, password } = req.body;
@@ -148,7 +187,6 @@ export const updateAdminProfile = async (req, res) => {
     if (profile_photo) user.profile_photo = profile_photo;
     await user.save();
 
-    // Audit log
     await new Audit({
       admin: req.user.id,
       action: 'update_profile',
@@ -186,7 +224,6 @@ export const changeAdminPassword = async (req, res) => {
     user.password = newPassword;
     await user.save();
 
-    // Audit log
     await new Audit({
       admin: req.user.id,
       action: 'change_password',
@@ -244,7 +281,6 @@ export const deleteUser = async (req, res) => {
 
     await User.deleteOne({ _id: userId });
 
-    // Audit log
     await new Audit({
       admin: req.user.id,
       action: 'delete_user',
@@ -276,7 +312,6 @@ export const addAdmin = async (req, res) => {
     });
     await newAdmin.save();
 
-    // Audit log
     await new Audit({
       admin: req.user.id,
       action: 'add_admin',

@@ -5,7 +5,6 @@ import crypto from "crypto";
 import nodemailer from "nodemailer";
 import upload from "../utils/upload.js";
 
-
 const generateToken = (user) => {
   return jwt.sign(
     { id: user._id, role: user.role, status: user.status },
@@ -43,7 +42,8 @@ export const registerUser = async (req, res) => {
       location: role === "Lawyer" ? location : undefined,
     });
     await newUser.save();
- // Trigger notification for new lawyer
+
+    // Trigger notification for new lawyer
     if (role === "Lawyer") {
       const notification = new Notification({
         message: `New lawyer registered: ${username}`,
@@ -53,11 +53,27 @@ export const registerUser = async (req, res) => {
       });
       await notification.save();
 
-// Notify all admins 
-  const admins = await User.find({ role: "Admin" });
+      // Notify all admins via email (replacing placeholder)
+      const admins = await User.find({ role: "Admin" });
+      const transporter = nodemailer.createTransport({
+        service: "Gmail",
+        auth: {
+          user: process.env.EMAIL_HOST_USER,
+          pass: process.env.EMAIL_HOST_PASSWORD,
+        },
+      });
+
+      const dashboardUrl = `${process.env.FRONTEND_URL}/admin`;
       for (const admin of admins) {
-        // Placeholder for future email notification to admins
-        console.log(`Notify admin ${admin.username}: New lawyer ${username} pending approval`);
+        const mailOptions = {
+          to: admin.email,
+          from: process.env.EMAIL_HOST_USER,
+          subject: "New Lawyer Registration - Review Required",
+          text: `A new lawyer has registered:\n\nUsername: ${username}\nEmail: ${email}\nSpecialization: ${specialization}\nLocation: ${location}\n\nReview and approve/reject in the dashboard: ${dashboardUrl}`,
+        };
+
+        await transporter.sendMail(mailOptions);
+        console.log(`✅ Notification email sent to admin ${admin.username} (${admin.email})`);
       }
     }
 
@@ -78,6 +94,7 @@ export const registerUser = async (req, res) => {
 
 export const registerUserWithUpload = [upload, registerUser];
 
+// Rest of your code (loginUser, requestPasswordReset, resetPassword) remains unchanged
 export const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
