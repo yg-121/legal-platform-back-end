@@ -1,3 +1,4 @@
+import { io } from '../index.js'; 
 import User from "../models/User.js";
 import Notification from "../models/Notification.js";
 import jwt from "jsonwebtoken";
@@ -53,6 +54,10 @@ export const registerUser = async (req, res) => {
       });
       await notification.save();
 
+      // Emit notification to all connected clients
+      console.log('Emitting new_admin_notification:', notification.toObject());
+      io.emit('new_admin_notification', notification.toObject());
+
       // Notify all admins via email (replacing placeholder)
       const admins = await User.find({ role: "Admin" });
       const transporter = nodemailer.createTransport({
@@ -94,7 +99,6 @@ export const registerUser = async (req, res) => {
 
 export const registerUserWithUpload = [upload, registerUser];
 
-// Rest of your code (loginUser, requestPasswordReset, resetPassword) remains unchanged
 export const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -108,7 +112,7 @@ export const loginUser = async (req, res) => {
     }
 
     if (user.role === "Lawyer" && user.status === "Pending") {
-      return res.status(403).json({ message: `Account is ${user.status}. Please wait for approval.` });
+      return res.status(403).json({ message: `Account is ${user.status}. we will aprove you,please check your email later.` });
     }
 
     if (user.role === "Lawyer" && user.status === "Rejected") {
