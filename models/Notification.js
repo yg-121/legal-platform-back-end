@@ -4,7 +4,9 @@ const NotificationSchema = new mongoose.Schema({
   user: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'User', 
-    required: function() { return this.type !== 'new_lawyer'; } // Optional for admin notifications
+    required: function() { 
+      return !['new_lawyer', 'new_case'].includes(this.type); // Optional for new_lawyer and new_case
+    }
   },
   message: { 
     type: String, 
@@ -12,7 +14,7 @@ const NotificationSchema = new mongoose.Schema({
   },
   type: { 
     type: String, 
-    enum: ['Bid', 'Appointment', 'Chat', 'BidAccepted', 'new_lawyer','password_reset'], // Added 'new_lawyer'
+    enum: ['Bid', 'Appointment', 'Chat', 'BidAccepted', 'new_lawyer', 'new_case', 'case_closed'], // Added new_case, case_closed
     required: true 
   },
   status: { 
@@ -26,7 +28,9 @@ const NotificationSchema = new mongoose.Schema({
   },
   isAdminNotification: { 
     type: Boolean, 
-    default: function() { return this.type === 'new_lawyer'; } // True for admin-specific notifications
+    default: function() { 
+      return this.type === 'new_lawyer'; // Only true for new_lawyer (admin-specific)
+    } 
   }
 });
 

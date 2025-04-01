@@ -6,6 +6,6 @@ const router = express.Router();
 
 router.post('/', authMiddleware(['Lawyer']), createBid);
 router.get('/case/:caseId', authMiddleware(['Client', 'Admin']), getCaseBids);
-router.post('/accept/:bidId', authMiddleware(['Client']), acceptBid);
+router.patch('/accept/:bidId', authMiddleware(['Client']), acceptBid);
 
 export default router;

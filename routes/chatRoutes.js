@@ -5,7 +5,7 @@ import { sendMessage, getChatHistory, getUnreadChats, markChatAsRead } from '../
 
 const router = express.Router();
 
-router.post('/', authMiddleware(['Client', 'Lawyer']), chatUpload, sendMessage);
+router.post('/send', authMiddleware(['Client', 'Lawyer']), chatUpload, sendMessage);
 router.get('/history/:userId', authMiddleware(['Client', 'Lawyer']), getChatHistory);
 router.get('/unread', authMiddleware(['Client', 'Lawyer']), getUnreadChats);
 router.patch('/:chatId/read', authMiddleware(['Client', 'Lawyer']), markChatAsRead);
