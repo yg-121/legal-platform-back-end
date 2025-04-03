@@ -1,8 +1,10 @@
 import mongoose from 'mongoose';
 import Chat from '../models/Chat.js';
 import Notification from '../models/Notification.js';
+import Case from '../models/Case.js'; // Add this for case lookup
 import { io } from '../index.js';
-import path from 'path'; // Add this
+import path from 'path';
+import { initiateRating } from './ratingController.js'; // Keep this one, remove the duplicate
 
 // Send a message (text, file, or voice)
 export const sendMessage = async (req, res) => {
@@ -140,5 +142,42 @@ export const markChatAsRead = async (req, res) => {
   } catch (error) {
     console.error('❌ Mark Chat Read Error:', error.message);
     res.status(500).json({ message: 'Failed to mark chat as read', error: error.message });
+  }
+};
+
+// Start chat and initiate rating
+export const startChat = async (req, res) => {
+  try {
+    const { caseId } = req.body;
+    const client = req.user.id;
+
+    const caseData = await Case.findById(caseId);
+    if (!caseData) {
+      return res.status(404).json({ message: 'Case not found' });
+    }
+    if (caseData.client.toString() !== client) {
+      return res.status(403).json({ message: 'Only the case owner can start chat' });
+    }
+    if (!caseData.assigned_lawyer) {
+      return res.status(400).json({ message: 'No lawyer assigned yet' });
+    }
+
+    // Check if chat already started (optional, based on your logic)
+    const existingChat = await Chat.findOne({
+      $or: [
+        { sender: client, receiver: caseData.assigned_lawyer, case: caseId },
+        { sender: caseData.assigned_lawyer, receiver: client, case: caseId },
+      ],
+    });
+
+    if (!existingChat) {
+      // Initiate rating only on first chat
+      await initiateRating(caseId, client, caseData.assigned_lawyer);
+    }
+
+    res.json({ message: 'Chat initiated', case: caseData });
+  } catch (error) {
+    console.error('❌ Start Chat Error:', error.message);
+    res.status(500).json({ message: 'Failed to start chat', error: error.message });
   }
 };

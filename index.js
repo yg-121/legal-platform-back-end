@@ -13,8 +13,10 @@ import userRoutes from './routes/userRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
 import ratingRoutes from './routes/ratingRoutes.js';
+import { remindPendingRatings } from './controllers/ratingController.js';
 import auditRoutes from './routes/auditRoutes.js';
 import path from 'path';
+import cron from 'node-cron';
 import { fileURLToPath } from 'url';
 
 connectDB();
@@ -50,7 +52,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/chats', chatRoutes);
 app.use('/api/ratings', ratingRoutes);
 app.use('/api', auditRoutes);
-
+cron.schedule('0 0 * * *', remindPendingRatings);
 // Serve static files from 'uploads' directory
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 

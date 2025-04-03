@@ -1,5 +1,5 @@
 import Case from '../models/Case.js';
-import Bid from '../models/Bid.js'; // Add Bid model
+import Bid from '../models/Bid.js';
 import Audit from '../models/Audit.js';
 import User from '../models/User.js';
 import { sendNotification } from '../utils/notify.js';
@@ -8,21 +8,29 @@ import { io } from '../index.js';
 // Create a new case
 export const createCase = async (req, res) => {
   try {
-    const { description } = req.body;
+    const { description, category, deadline } = req.body;
     const file_id = req.file ? req.file.path : null;
     const client = req.user.id;
 
-    if (!description) return res.status(400).json({ message: 'Description is required' });
-    if (description.length > 500) return res.status(400).json({ message: 'Description must be under 500 characters' });
+    if (!description || !category || !deadline) {
+      return res.status(400).json({ message: 'Description, category, and deadline are required' });
+    }
+    if (description.length > 500) {
+      return res.status(400).json({ message: 'Description must be under 500 characters' });
+    }
+    const parsedDeadline = new Date(deadline);
+    if (isNaN(parsedDeadline) || parsedDeadline < Date.now()) {
+      return res.status(400).json({ message: 'Deadline must be a valid future date' });
+    }
 
-    const newCase = new Case({ client, description, file_id });
+    const newCase = new Case({ client, description, category, deadline: parsedDeadline, file_id });
     await newCase.save();
 
     const lawyers = await User.find({ role: 'Lawyer' });
     for (const lawyer of lawyers) {
       await sendNotification(
         lawyer._id,
-        `New case posted: ${description.substring(0, 50)}...`,
+        `New ${category} case posted: ${description.substring(0, 50)}... (Deadline: ${parsedDeadline.toLocaleDateString()})`,
         'new_case'
       );
     }
@@ -34,7 +42,7 @@ export const createCase = async (req, res) => {
   }
 };
 
-// Bid on a case (moved from bidController.js logic)
+// Bid on a case
 export const bidOnCase = async (req, res) => {
   try {
     const { caseId, amount, comment } = req.body;
@@ -54,6 +62,7 @@ export const bidOnCase = async (req, res) => {
     if (!caseExists) {
       return res.status(404).json({ message: 'Case not found' });
     }
+    console.log(`Case ID: ${caseId}, Status: ${caseExists.status}`); // Debug log
     if (caseExists.status !== 'Posted') {
       return res.status(400).json({ message: 'Cannot bid on a non-posted case' });
     }
@@ -66,7 +75,7 @@ export const bidOnCase = async (req, res) => {
 
     await sendNotification(
       caseExists.client,
-      `Lawyer ${req.user.username} bid ${amount} ETB on your case: "${caseExists.description}"${comment ? ` - "${comment}"` : ''}`,
+      `Lawyer ${req.user.username} bid ${amount} ETB on your ${caseExists.category} case: "${caseExists.description}" (Deadline: ${caseExists.deadline.toLocaleDateString()})${comment ? ` - "${comment}"` : ''}`,
       'Bid'
     );
 
@@ -108,7 +117,7 @@ export const getClientCases = async (req, res) => {
 export const updateCase = async (req, res) => {
   try {
     const { caseId } = req.params;
-    const { description } = req.body;
+    const { description, category, deadline } = req.body;
     const file_id = req.file ? req.file.path : null;
     const clientId = req.user.id;
 
@@ -125,9 +134,22 @@ export const updateCase = async (req, res) => {
       if (description.length > 500) return res.status(400).json({ message: 'Description must be under 500 characters' });
       caseData.description = description;
     }
+    if (category) {
+      if (!['Contract', 'Family', 'Criminal', 'Property', 'Labor', 'Other'].includes(category)) {
+        return res.status(400).json({ message: 'Invalid category' });
+      }
+      caseData.category = category;
+    }
+    if (deadline) {
+      const parsedDeadline = new Date(deadline);
+      if (isNaN(parsedDeadline) || parsedDeadline < Date.now()) {
+        return res.status(400).json({ message: 'Deadline must be a valid future date' });
+      }
+      caseData.deadline = parsedDeadline;
+    }
     if (file_id) caseData.file_id = file_id;
-    await caseData.save();
 
+    await caseData.save();
     res.json({ message: 'Case updated', case: caseData });
   } catch (error) {
     console.error('❌ Update Case Error:', error.message);
