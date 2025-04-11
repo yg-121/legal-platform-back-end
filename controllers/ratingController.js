@@ -75,6 +75,7 @@ export const createRating = async ( wreq, res) => {
     const avgRating = ratings.length ? ratings.reduce((sum, r) => sum + r.rating, 0) / ratings.length : 0;
     lawyer.ratings = ratings.map(r => r._id);
     lawyer.averageRating = Number(avgRating.toFixed(1));
+    lawyer.ratingCount = ratings.length;
     await lawyer.save();
 
     await sendNotification(
@@ -130,6 +131,7 @@ export const getLawyerRatings = async (req, res) => {
 
     res.json({
       averageRating: lawyer.averageRating,
+      ratingCount: lawyer.ratingCount,
       ratings,
     });
   } catch (error) {
@@ -159,5 +161,24 @@ export const remindPendingRatings = async () => {
     console.log(`Sent ${dismissedRatings.length} rating reminders`);
   } catch (error) {
     console.error('❌ Rating Reminder Error:', error.message);
+  }
+};
+export const getPendingRatings = async (req, res) => {
+  try {
+    const ratings = await Rating.find({ 
+      client: req.user.id, 
+      status: 'Pending' 
+    })
+      .populate('case', 'description')
+      .populate('lawyer', 'username');
+    const pending = ratings.map(r => ({
+      caseId: r.case._id,
+      lawyerUsername: r.lawyer.username,
+      caseDescription: r.case.description,
+    }));
+    res.json(pending);
+  } catch (error) {
+    console.error('❌ Fetch Pending Ratings Error:', error.message);
+    res.status(500).json({ message: 'Failed to fetch pending ratings', error: error.message });
   }
 };

@@ -3,6 +3,10 @@ import Audit from '../models/Audit.js';
 import authMiddleware from '../middlewares/authMiddleware.js';
 import profileUpload from '../utils/profileUpload.js';
 import nodemailer from 'nodemailer'; // Add this import
+import Case from '../models/Case.js';
+import Rating from '../models/Rating.js';
+import Appointment from '../models/Appointment.js';
+import Bid from '../models/Bid.js';
 
 export const getAdminProfile = async (req, res) => {
   try {
@@ -330,6 +334,109 @@ export const addAdmin = async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Add Admin Error:', error.message);
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
+export const getLawyers = async (req, res) => {
+  try {
+    const lawyers = await User.find({ role: 'Lawyer', status: 'Active' })
+      .select('username email specialization location averageRating ratingCount')
+      .sort({ averageRating: -1 });
+
+    res.json({ message: 'Lawyers fetched', lawyers });
+  } catch (error) {
+    console.error('❌ Fetch Lawyers Error:', error.message);
+    res.status(500).json({ message: 'Failed to fetch lawyers', error: error.message });
+  }
+};
+
+// Client Dashboard
+export const getClientDashboard = async (req, res) => {
+  try {
+    const clientId = req.user.id;
+
+    // Total and active cases
+    const cases = await Case.find({ client: clientId });
+    const totalCases = cases.length;
+    const activeCases = cases.filter(c => c.status !== 'Closed').length;
+
+    // Pending ratings
+    const pendingRatings = await Rating.countDocuments({ client: clientId, status: 'Pending' });
+
+    // Upcoming appointments
+    const upcomingAppointments = await Appointment.countDocuments({
+      client: clientId,
+      date: { $gt: new Date() }, // Future dates only
+    });
+
+    res.json({
+      message: 'Client dashboard fetched successfully',
+      dashboard: {
+        totalCases,
+        activeCases,
+        pendingRatings,
+        upcomingAppointments,
+      },
+    });
+  } catch (error) {
+    console.error('❌ Client Dashboard Error:', error.message);
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
+// Lawyer Dashboard
+export const getLawyerDashboard = async (req, res) => {
+  try {
+    const lawyerId = req.user.id;
+
+    // Total and active cases
+    const cases = await Case.find({ assigned_lawyer: lawyerId });
+    const totalCases = cases.length;
+    const activeCases = cases.filter(c => c.status !== 'Closed').length;
+
+    // Total bids placed
+    const totalBids = await Bid.countDocuments({ lawyer: lawyerId });
+    const acceptedBids = await Bid.countDocuments({ lawyer: lawyerId, status: 'Accepted' });
+    const bidSuccessRate = totalBids > 0 ? Number(((acceptedBids / totalBids) * 100).toFixed(1)) : 0;
+
+    // Average rating from completed ratings
+    const ratings = await Rating.find({ lawyer: lawyerId, status: 'Completed' });
+    const averageRating = ratings.length
+      ? Number((ratings.reduce((sum, r) => sum + r.rating, 0) / ratings.length).toFixed(1))
+      : 0;
+
+    // Upcoming appointments
+    const upcomingAppointments = await Appointment.countDocuments({
+      lawyer: lawyerId,
+      date: { $gt: new Date() }, // Future dates only
+    });
+// Recent cases (last 3 assigned)
+    const recentCases = await Case.find({ assigned_lawyer: lawyerId })
+      .sort({ updatedAt: -1 }) // Most recent first
+      .limit(3)
+      .select('description category deadline') // Only fetch needed fields
+      .lean(); // Convert to plain JS objects for simplicity
+    const formattedRecentCases = recentCases.map(c => ({
+      caseId: c._id,
+      description: c.description.substring(0, 50) + (c.description.length > 50 ? '...' : ''), // Truncate
+      category: c.category,
+      deadline: c.deadline,
+    }));
+    res.json({
+      message: 'Lawyer dashboard fetched successfully',
+      dashboard: {
+        totalCases,
+        activeCases,
+        totalBids,
+        bidSuccessRate,
+        averageRating,
+        upcomingAppointments,
+        recentCases:formattedRecentCases,
+      },
+    });
+  } catch (error) {
+    console.error('❌ Lawyer Dashboard Error:', error.message);
     res.status(500).json({ message: 'Server Error', error: error.message });
   }
 };

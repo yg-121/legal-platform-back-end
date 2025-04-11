@@ -26,6 +26,6 @@ const caseUpload = multer({
     storage: storage,
     limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
     fileFilter: fileFilter
-}).single('case_file');
+}).array('case_files', 5);
 
 export default caseUpload;

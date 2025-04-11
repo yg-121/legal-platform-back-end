@@ -19,7 +19,8 @@ const UserSchema = new mongoose.Schema({
         default: function() { return this.role === 'Lawyer' ? 'Pending' : 'Active'; }
     },
     ratings: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Rating' }],
-    averageRating: { type: Number, default: 0 }
+    averageRating: { type: Number, default: 0 },
+    ratingCount: { type: Number, default: 0 }
     
 }, { timestamps: true });
 

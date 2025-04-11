@@ -13,8 +13,12 @@ const CaseSchema = new mongoose.Schema({
         required: true,
       },
     status: { type: String, enum: ['Posted', 'Assigned', 'Closed'], default: 'Posted' },
-    file_id: { type: String, required: false }, // For case documents
-    winning_bid: { type: mongoose.Schema.Types.ObjectId, ref: 'Bid', default: null },
+    documents: [{ 
+      filePath: { type: String, required: true },
+      fileName: { type: String, required: true },
+      uploadedAt: { type: Date, default: Date.now },
+  }], 
+     winning_bid: { type: mongoose.Schema.Types.ObjectId, ref: 'Bid', default: null },
     assigned_lawyer: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now }
