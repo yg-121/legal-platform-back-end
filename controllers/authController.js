@@ -16,7 +16,10 @@ const generateToken = (user) => {
 
 export const registerUser = async (req, res) => {
   try {
-    const { username, email, password, role, phone, specialization, location } = req.body;
+    const { 
+      username, email, password, role, phone, specialization, location,
+      yearsOfExperience, bio, certifications, hourlyRate, languages 
+    } = req.body;
     const license_file = req.file ? req.file.path : null;
 
     if (!username || !email || !password || !role) {
@@ -27,10 +30,37 @@ export const registerUser = async (req, res) => {
       if (!license_file) return res.status(400).json({ message: "License file upload is required for Lawyers" });
       if (!specialization) return res.status(400).json({ message: "Specialization is required for Lawyers" });
       if (!location) return res.status(400).json({ message: "Location is required for Lawyers" });
+      if (!yearsOfExperience) return res.status(400).json({ message: "Years of experience is required for Lawyers" });
     }
 
     const userExists = await User.findOne({ email });
     if (userExists) return res.status(400).json({ message: "Email already exists" });
+
+    // Process specialization for Postman (handles string or array)
+    let specializationArray;
+    if (role === "Lawyer") {
+      if (Array.isArray(specialization)) {
+        specializationArray = specialization; // Already an array from Postman
+      } else if (typeof specialization === 'string') {
+        specializationArray = specialization.split(',').map(s => s.trim()); // Split comma-separated string
+      } else {
+        return res.status(400).json({ 
+          message: "Specialization must be a string (e.g., 'Family Law, Criminal Law') or an array (e.g., ['Family Law', 'Criminal Law'])" 
+        });
+      }
+
+      // Validate against enum
+      const validSpecializations = [
+        'Criminal Law', 'Family Law', 'Corporate Law', 'Immigration', 'Personal Injury',
+        'Real Estate', 'Intellectual Property', 'Employment Law', 'Bankruptcy', 'Tax Law'
+      ];
+      const invalidSpecializations = specializationArray.filter(s => !validSpecializations.includes(s));
+      if (invalidSpecializations.length > 0) {
+        return res.status(400).json({ 
+          message: `Invalid specialization values: ${invalidSpecializations.join(', ')}. Valid options: ${validSpecializations.join(', ')}`
+        });
+      }
+    }
 
     const newUser = new User({
       username,
@@ -39,26 +69,26 @@ export const registerUser = async (req, res) => {
       role,
       phone: phone || undefined,
       license_file: role === "Lawyer" ? license_file : undefined,
-      specialization: role === "Lawyer" ? specialization : undefined,
+      specialization: role === "Lawyer" ? specializationArray : undefined,
       location: role === "Lawyer" ? location : undefined,
+      yearsOfExperience: role === "Lawyer" ? parseInt(yearsOfExperience) : undefined,
+      bio: role === "Lawyer" ? (bio || '') : undefined,
+      certifications: role === "Lawyer" && certifications ? (Array.isArray(certifications) ? certifications : [certifications]) : undefined,
+      hourlyRate: role === "Lawyer" && hourlyRate ? parseFloat(hourlyRate) : undefined,
+      languages: role === "Lawyer" && languages ? (Array.isArray(languages) ? languages : [languages]) : undefined
     });
     await newUser.save();
 
-    // Trigger notification for new lawyer
     if (role === "Lawyer") {
       const notification = new Notification({
-        message: `New lawyer registered: ${username}`,
+        message: `New lawyer registered: ${username} (${newUser.specialization.join(', ')})`,
         type: "new_lawyer",
         user: null,
         isAdminNotification: true,
       });
       await notification.save();
-
-      // Emit notification to all connected clients
-      console.log('Emitting new_admin_notification:', notification.toObject());
       io.emit('new_admin_notification', notification.toObject());
 
-      // Notify all admins via email (replacing placeholder)
       const admins = await User.find({ role: "Admin" });
       const transporter = nodemailer.createTransport({
         service: "Gmail",
@@ -74,9 +104,8 @@ export const registerUser = async (req, res) => {
           to: admin.email,
           from: process.env.EMAIL_HOST_USER,
           subject: "New Lawyer Registration - Review Required",
-          text: `A new lawyer has registered:\n\nUsername: ${username}\nEmail: ${email}\nSpecialization: ${specialization}\nLocation: ${location}\n\nReview and approve/reject in the dashboard: ${dashboardUrl}`,
+          text: `A new lawyer has registered:\n\nUsername: ${username}\nEmail: ${email}\nSpecialization: ${newUser.specialization.join(', ')}\nLocation: ${location}\nYears of Experience: ${yearsOfExperience}\n\nReview and approve/reject in the dashboard: ${dashboardUrl}`,
         };
-
         await transporter.sendMail(mailOptions);
         console.log(`✅ Notification email sent to admin ${admin.username} (${admin.email})`);
       }
@@ -99,6 +128,7 @@ export const registerUser = async (req, res) => {
 
 export const registerUserWithUpload = [upload, registerUser];
 
+// loginUser, requestPasswordReset, resetPassword remain unchanged
 export const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -112,7 +142,7 @@ export const loginUser = async (req, res) => {
     }
 
     if (user.role === "Lawyer" && user.status === "Pending") {
-      return res.status(403).json({ message: `Account is ${user.status}. we will aprove you,please check your email later.` });
+      return res.status(403).json({ message: `Account is ${user.status}. We will approve you, please check your email later.` });
     }
 
     if (user.role === "Lawyer" && user.status === "Rejected") {
@@ -149,7 +179,7 @@ export const requestPasswordReset = async (req, res) => {
     const resetToken = crypto.randomBytes(32).toString("hex");
     const resetTokenHash = crypto.createHash("sha256").update(resetToken).digest("hex");
     user.resetPasswordToken = resetTokenHash;
-    user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
+    user.resetPasswordExpires = Date.now() + 3600000;
     await user.save();
 
     const transporter = nodemailer.createTransport({
@@ -160,17 +190,6 @@ export const requestPasswordReset = async (req, res) => {
       },
     });
 
-    await new Promise((resolve, reject) => {
-      transporter.verify((error, success) => {
-        if (error) {
-          console.error("❌ Transporter verification failed:", error.message);
-          reject(error);
-        } else {
-          console.log("✅ Transporter ready to send emails");
-          resolve(success);
-        }
-      });
-    });
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
     const mailOptions = {
       to: user.email,
@@ -178,12 +197,6 @@ export const requestPasswordReset = async (req, res) => {
       subject: "Password Reset Request",
       text: `You requested a password reset for your account.\n\nClick this link to reset your password: ${resetUrl}\n\nThis link expires in 1 hour. If you didn’t request this, please ignore this email.`,
     };
-
-    console.log("Sending email with config:", {
-      to: user.email,
-      from: process.env.EMAIL_HOST_USER,
-      subject: mailOptions.subject,
-    });
 
     await transporter.sendMail(mailOptions);
     console.log(`✅ Reset email sent to ${user.email}`);
@@ -211,7 +224,7 @@ export const resetPassword = async (req, res) => {
     if (!user) {
       return res.status(400).json({ message: "Invalid or expired reset token" });
     }
-    user.password = newPassword; // Hashed by pre-save hook
+    user.password = newPassword;
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
     await user.save();

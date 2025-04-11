@@ -2,11 +2,13 @@ import User from '../models/User.js';
 import Audit from '../models/Audit.js'; 
 import authMiddleware from '../middlewares/authMiddleware.js';
 import profileUpload from '../utils/profileUpload.js';
-import nodemailer from 'nodemailer'; // Add this import
+import nodemailer from 'nodemailer';
 import Case from '../models/Case.js';
 import Rating from '../models/Rating.js';
 import Appointment from '../models/Appointment.js';
 import Bid from '../models/Bid.js';
+import Notification from '../models/Notification.js';
+import { io } from '../index.js';
 
 export const getAdminProfile = async (req, res) => {
   try {
@@ -43,16 +45,16 @@ export const approveLawyer = async (req, res) => {
     if (lawyer.status !== 'Pending') return res.status(400).json({ message: 'Lawyer is not pending approval' });
 
     lawyer.status = 'Active';
+    lawyer.verificationStatus = 'Verified';
     await lawyer.save();
-
     // Audit log
+
     await new Audit({
       admin: req.user.id,
       action: 'approve_lawyer',
       target: lawyerId,
     }).save();
-
-    // Notify lawyer via email
+  // Notify lawyer via email
     const transporter = nodemailer.createTransport({
       service: "Gmail",
       auth: {
@@ -65,7 +67,7 @@ export const approveLawyer = async (req, res) => {
       to: lawyer.email,
       from: process.env.EMAIL_HOST_USER,
       subject: "Your Lawyer Account Has Been Approved",
-      text: `Dear ${lawyer.username},\n\nYour lawyer account has been approved. You can now log in: ${process.env.FRONTEND_URL}/login\n\nWelcome to the platform!`,
+      text: `Dear ${lawyer.username},\n\nYour lawyer account has been approved. You can now log in and update your profile: ${process.env.FRONTEND_URL}/login\n\nWelcome to the platform!`,
     };
 
     await transporter.sendMail(mailOptions);
@@ -80,6 +82,7 @@ export const approveLawyer = async (req, res) => {
         license_file: lawyer.license_file,
         profile_photo: lawyer.profile_photo,
         status: lawyer.status,
+        verificationStatus: lawyer.verificationStatus
       },
     });
   } catch (error) {
@@ -90,7 +93,7 @@ export const approveLawyer = async (req, res) => {
 
 export const rejectLawyer = async (req, res) => {
   try {
-    const { lawyerId } = req.body;
+    const { lawyerId, reason } = req.body;
     if (!lawyerId) return res.status(400).json({ message: 'Lawyer ID is required' });
 
     const lawyer = await User.findById(lawyerId);
@@ -98,15 +101,15 @@ export const rejectLawyer = async (req, res) => {
     if (lawyer.status !== 'Pending') return res.status(400).json({ message: 'Lawyer is not pending approval' });
 
     lawyer.status = 'Rejected';
+    lawyer.verificationStatus = 'Rejected';
     await lawyer.save();
-
     // Audit log
     await new Audit({
       admin: req.user.id,
       action: 'reject_lawyer',
       target: lawyerId,
+      details: reason || 'No reason provided'
     }).save();
-
     // Notify lawyer via email
     const transporter = nodemailer.createTransport({
       service: "Gmail",
@@ -120,7 +123,7 @@ export const rejectLawyer = async (req, res) => {
       to: lawyer.email,
       from: process.env.EMAIL_HOST_USER,
       subject: "Your Lawyer Account Registration",
-      text: `Dear ${lawyer.username},\n\nYour lawyer account registration was reviewed but not approved at this time. For more information, contact support.\n\nThank you for your interest.`,
+      text: `Dear ${lawyer.username},\n\nYour lawyer account registration was rejected. Reason: ${reason || 'Not specified'}. Please update your details and reapply.\n\nThank you for your interest.`,
     };
 
     await transporter.sendMail(mailOptions);
@@ -135,6 +138,7 @@ export const rejectLawyer = async (req, res) => {
         license_file: lawyer.license_file,
         profile_photo: lawyer.profile_photo,
         status: lawyer.status,
+        verificationStatus: lawyer.verificationStatus
       },
     });
   } catch (error) {
@@ -142,23 +146,56 @@ export const rejectLawyer = async (req, res) => {
     res.status(500).json({ message: 'Server Error', error: error.message });
   }
 };
-
 // Rest of your code (updateProfile, updateAdminProfile, etc.) remains unchanged
 export const updateProfile = async (req, res) => {
   try {
-    const { phone, password } = req.body;
+    const { 
+      phone, password, specialization, location, yearsOfExperience, 
+      bio, certifications, hourlyRate, languages, isAvailable 
+    } = req.body;
     const profile_photo = req.file ? req.file.path : null;
-    const user = await User.findById(req.user.id);
 
+    const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ message: 'User not found' });
-    if (user.role === 'Lawyer' && user.status !== 'Active') {
-      return res.status(403).json({ message: 'Account must be Active to update profile' });
+    if (user.role !== 'Lawyer') return res.status(403).json({ message: 'Only lawyers can update this profile' });
+    if (user.status !== 'Active') return res.status(403).json({ message: 'Account must be Active to update profile' });
+
+    const updatedFields = {};
+    let requiresReverification = false;
+
+    if (phone) updatedFields.phone = phone;
+    if (password) updatedFields.password = password;
+    if (profile_photo) updatedFields.profile_photo = profile_photo;
+    if (specialization) {
+      updatedFields.specialization = Array.isArray(specialization) ? specialization : [specialization];
+      requiresReverification = true;
+    }
+    if (location) updatedFields.location = location;
+    if (yearsOfExperience) updatedFields.yearsOfExperience = parseInt(yearsOfExperience);
+    if (bio) updatedFields.bio = bio.substring(0, 500);
+    if (certifications) updatedFields.certifications = Array.isArray(certifications) ? certifications : [certifications];
+    if (hourlyRate) updatedFields.hourlyRate = parseFloat(hourlyRate);
+    if (languages) updatedFields.languages = Array.isArray(languages) ? languages : [languages];
+    if (typeof isAvailable !== 'undefined') updatedFields.isAvailable = isAvailable === 'true' || isAvailable === true;
+
+    if (requiresReverification) {
+      updatedFields.verificationStatus = 'Pending';
+      updatedFields.status = 'Pending';
     }
 
-    if (phone) user.phone = phone;
-    if (password) user.password = password;
-    if (profile_photo) user.profile_photo = profile_photo;
+    Object.assign(user, updatedFields);
     await user.save();
+
+    if (requiresReverification) {
+      const notification = new Notification({
+        message: `Lawyer ${user.username} updated specialization to ${updatedFields.specialization.join(', ')}. Please re-verify.`,
+        type: 'lawyer_update',
+        user: null,
+        isAdminNotification: true,
+      });
+      await notification.save();
+      io.emit('new_admin_notification', notification.toObject());
+    }
 
     res.json({
       _id: user._id,
@@ -168,6 +205,15 @@ export const updateProfile = async (req, res) => {
       role: user.role,
       status: user.status,
       profile_photo: user.profile_photo,
+      specialization: user.specialization,
+      location: user.location,
+      yearsOfExperience: user.yearsOfExperience,
+      bio: user.bio,
+      certifications: user.certifications,
+      hourlyRate: user.hourlyRate,
+      languages: user.languages,
+      isAvailable: user.isAvailable,
+      verificationStatus: user.verificationStatus
     });
   } catch (error) {
     console.error('❌ Update Profile Error:', error.message);
@@ -177,6 +223,7 @@ export const updateProfile = async (req, res) => {
 
 export const updateProfileWithUpload = [profileUpload, updateProfile];
 
+// Other admin functions remain unchanged
 export const updateAdminProfile = async (req, res) => {
   try {
     const { username, email, phone } = req.body;
@@ -340,9 +387,18 @@ export const addAdmin = async (req, res) => {
 
 export const getLawyers = async (req, res) => {
   try {
-    const lawyers = await User.find({ role: 'Lawyer', status: 'Active' })
-      .select('username email specialization location averageRating ratingCount')
-      .sort({ averageRating: -1 });
+    const { specialization, location, minRating, available } = req.query;
+    const filters = { role: 'Lawyer', status: 'Active', verificationStatus: 'Verified' };
+
+    if (specialization) filters.specialization = { $in: Array.isArray(specialization) ? specialization : [specialization] };
+    if (location) filters.location = { $regex: location, $options: 'i' };
+    if (minRating) filters.averageRating = { $gte: parseFloat(minRating) };
+    if (available) filters.isAvailable = available === 'true';
+
+    const lawyers = await User.find(filters)
+      .select('username specialization location averageRating ratingCount hourlyRate profile_photo')
+      .sort({ averageRating: -1 })
+      .lean();
 
     res.json({ message: 'Lawyers fetched', lawyers });
   } catch (error) {
@@ -351,23 +407,38 @@ export const getLawyers = async (req, res) => {
   }
 };
 
-// Client Dashboard
+export const getLawyerProfile = async (req, res) => {
+  try {
+    const { lawyerId } = req.params;
+    const lawyer = await User.findById(lawyerId)
+      .select('username specialization yearsOfExperience location bio certifications hourlyRate languages averageRating ratingCount profile_photo isAvailable verificationStatus role')
+      .lean();
+    if (!lawyer || lawyer.role !== 'Lawyer') {
+      return res.status(404).json({ message: 'Lawyer not found' });
+    }
+
+    const verified = lawyer.verificationStatus === 'Verified';
+    res.json({ message: 'Lawyer profile fetched', lawyer: { ...lawyer, verified } });
+  } catch (error) {
+    console.error('❌ Fetch Lawyer Profile Error:', error.message);
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
+// Client and Lawyer Dashboards remain unchanged
 export const getClientDashboard = async (req, res) => {
   try {
     const clientId = req.user.id;
 
-    // Total and active cases
     const cases = await Case.find({ client: clientId });
     const totalCases = cases.length;
     const activeCases = cases.filter(c => c.status !== 'Closed').length;
 
-    // Pending ratings
     const pendingRatings = await Rating.countDocuments({ client: clientId, status: 'Pending' });
 
-    // Upcoming appointments
     const upcomingAppointments = await Appointment.countDocuments({
       client: clientId,
-      date: { $gt: new Date() }, // Future dates only
+      date: { $gt: new Date() },
     });
 
     res.json({
@@ -385,44 +456,40 @@ export const getClientDashboard = async (req, res) => {
   }
 };
 
-// Lawyer Dashboard
 export const getLawyerDashboard = async (req, res) => {
   try {
     const lawyerId = req.user.id;
 
-    // Total and active cases
     const cases = await Case.find({ assigned_lawyer: lawyerId });
     const totalCases = cases.length;
     const activeCases = cases.filter(c => c.status !== 'Closed').length;
 
-    // Total bids placed
     const totalBids = await Bid.countDocuments({ lawyer: lawyerId });
     const acceptedBids = await Bid.countDocuments({ lawyer: lawyerId, status: 'Accepted' });
     const bidSuccessRate = totalBids > 0 ? Number(((acceptedBids / totalBids) * 100).toFixed(1)) : 0;
 
-    // Average rating from completed ratings
     const ratings = await Rating.find({ lawyer: lawyerId, status: 'Completed' });
     const averageRating = ratings.length
       ? Number((ratings.reduce((sum, r) => sum + r.rating, 0) / ratings.length).toFixed(1))
       : 0;
 
-    // Upcoming appointments
     const upcomingAppointments = await Appointment.countDocuments({
       lawyer: lawyerId,
-      date: { $gt: new Date() }, // Future dates only
+      date: { $gt: new Date() },
     });
-// Recent cases (last 3 assigned)
+
     const recentCases = await Case.find({ assigned_lawyer: lawyerId })
-      .sort({ updatedAt: -1 }) // Most recent first
+      .sort({ updatedAt: -1 })
       .limit(3)
-      .select('description category deadline') // Only fetch needed fields
-      .lean(); // Convert to plain JS objects for simplicity
+      .select('description category deadline')
+      .lean();
     const formattedRecentCases = recentCases.map(c => ({
       caseId: c._id,
-      description: c.description.substring(0, 50) + (c.description.length > 50 ? '...' : ''), // Truncate
+      description: c.description.substring(0, 50) + (c.description.length > 50 ? '...' : ''),
       category: c.category,
       deadline: c.deadline,
     }));
+
     res.json({
       message: 'Lawyer dashboard fetched successfully',
       dashboard: {
@@ -432,7 +499,7 @@ export const getLawyerDashboard = async (req, res) => {
         bidSuccessRate,
         averageRating,
         upcomingAppointments,
-        recentCases:formattedRecentCases,
+        recentCases: formattedRecentCases,
       },
     });
   } catch (error) {
