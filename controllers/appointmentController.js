@@ -4,8 +4,8 @@ import User from '../models/User.js';
 import { sendNotification } from '../utils/notify.js';
 import { io } from '../index.js';
 import nodemailer from 'nodemailer';
-import { createEvent } from 'ics'; // New import for ICS
-import { format } from 'date-fns'; // For formatting dates
+import { createEvent } from 'ics'; // New import for ICS 
+import { format } from 'date-fns'; // For formatting dates  
 
 // Create an appointment (client or lawyer)
 export const createAppointment = async (req, res) => {
@@ -64,6 +64,29 @@ export const createAppointment = async (req, res) => {
       appointmentData.lawyer = userId;
     } else {
       return res.status(403).json({ message: 'Only clients or lawyers can create appointments' });
+    }
+
+    // Check for conflicts
+    const conflictWindowStart = new Date(parsedDate.getTime() - 30 * 60 * 1000); // 30 min before
+    const conflictWindowEnd = new Date(parsedDate.getTime() + 30 * 60 * 1000); // 30 min after
+    const conflicts = await Appointment.find({
+      status: { $in: ['Pending', 'Confirmed'] },
+      $or: [
+        { lawyer: appointmentData.lawyer, date: { $gte: conflictWindowStart, $lte: conflictWindowEnd } },
+        { client: appointmentData.client, date: { $gte: conflictWindowStart, $lte: conflictWindowEnd } },
+      ],
+    });
+
+    if (conflicts.length > 0) {
+      return res.status(409).json({
+        message: 'Scheduling conflict detected',
+        conflicts: conflicts.map(c => ({
+          id: c._id,
+          date: c.date,
+          type: c.type,
+          with: c.lawyer.toString() === appointmentData.lawyer.toString() ? c.client : c.lawyer,
+        })),
+      });
     }
 
     const appointment = new Appointment(appointmentData);
@@ -208,6 +231,30 @@ export const changeAppointmentDate = async (req, res) => {
     }
     if (appointment.status === 'Cancelled') {
       return res.status(400).json({ message: 'Cannot change date of a cancelled appointment' });
+    }
+
+    // Check for conflicts
+    const conflictWindowStart = new Date(parsedDate.getTime() - 30 * 60 * 1000);
+    const conflictWindowEnd = new Date(parsedDate.getTime() + 30 * 60 * 1000);
+    const conflicts = await Appointment.find({
+      _id: { $ne: id }, // Exclude current appointment
+      status: { $in: ['Pending', 'Confirmed'] },
+      $or: [
+        { lawyer: appointment.lawyer, date: { $gte: conflictWindowStart, $lte: conflictWindowEnd } },
+        { client: appointment.client, date: { $gte: conflictWindowStart, $lte: conflictWindowEnd } },
+      ],
+    });
+
+    if (conflicts.length > 0) {
+      return res.status(409).json({
+        message: 'Scheduling conflict detected',
+        conflicts: conflicts.map(c => ({
+          id: c._id,
+          date: c.date,
+          type: c.type,
+          with: c.lawyer.toString() === appointment.lawyer.toString() ? c.client : c.lawyer,
+        })),
+      });
     }
 
     const oldDate = appointment.date.toLocaleString();

@@ -1,4 +1,5 @@
 import express from 'express';
+import authMiddleware from '../middlewares/authMiddleware.js';
 import {
   createAppointment,
   getAppointments,
@@ -8,7 +9,6 @@ import {
   completeAppointment,
   generateICS, // New import
 } from '../controllers/appointmentController.js';
-import authMiddleware from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
