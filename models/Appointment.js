@@ -29,6 +29,26 @@ const AppointmentSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
-});
+  // New fields for Clio-like features
+  type: {
+    type: String,
+    enum: ['Meeting', 'Hearing', 'Deadline', 'Other'],
+    default: 'Meeting',
+  },
+  description: {
+    type: String,
+    trim: true,
+    maxlength: 500,
+  },
+  reminderSent: {
+    type: Map,
+    of: Boolean,
+    default: { '24h': false, '1h': false }, // Tracks reminders
+  },
+}, { timestamps: true });
+
+// Index for efficient calendar queries
+AppointmentSchema.index({ lawyer: 1, date: 1 });
+AppointmentSchema.index({ client: 1, date: 1 });
 
 export default mongoose.model('Appointment', AppointmentSchema);
