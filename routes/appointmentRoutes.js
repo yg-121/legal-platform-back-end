@@ -1,14 +1,36 @@
 import express from 'express';
-import authMiddleware from '../middlewares/authMiddleware.js';
-import { createAppointment, getAppointments, confirmAppointment, cancelAppointment, changeAppointmentDate, completeAppointment } from '../controllers/appointmentController.js';
+import {
+  createAppointment,
+  getAppointments,
+  confirmAppointment,
+  cancelAppointment,
+  changeAppointmentDate,
+  completeAppointment,
+  generateICS, // New import
+} from '../controllers/appointmentController.js';
+import authMiddleware from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
+// Create an appointment (Client or Lawyer)
 router.post('/', authMiddleware(['Client', 'Lawyer']), createAppointment);
-router.get('/', authMiddleware(['Client', 'Lawyer']), getAppointments);
+
+// Get appointments (calendar view)
+router.get('/', authMiddleware(['Client', 'Lawyer', 'Admin']), getAppointments);
+
+// Confirm appointment (Lawyer only)
 router.patch('/:id/confirm', authMiddleware(['Lawyer']), confirmAppointment);
+
+// Cancel appointment (Client or Lawyer)
 router.patch('/:id/cancel', authMiddleware(['Client', 'Lawyer']), cancelAppointment);
+
+// Change appointment date (Client or Lawyer)
 router.patch('/:id/date', authMiddleware(['Client', 'Lawyer']), changeAppointmentDate);
-router.patch('/:id/complete', authMiddleware(['Lawyer']), completeAppointment); // New route
+
+// Complete appointment (Lawyer only)
+router.patch('/:id/complete', authMiddleware(['Lawyer']), completeAppointment);
+
+// Generate ICS file (Client or Lawyer)
+router.get('/:id/ics', authMiddleware(['Client', 'Lawyer']), generateICS);
 
 export default router;

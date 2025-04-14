@@ -4,6 +4,8 @@ import User from '../models/User.js';
 import { sendNotification } from '../utils/notify.js';
 import { io } from '../index.js';
 import nodemailer from 'nodemailer';
+import { createEvent } from 'ics'; // New import for ICS
+import { format } from 'date-fns'; // For formatting dates
 
 // Create an appointment (client or lawyer)
 export const createAppointment = async (req, res) => {
@@ -287,7 +289,7 @@ export const sendAppointmentReminders = async () => {
       .populate('client', 'email username')
       .populate('case', 'description');
 
-    console.log(`Found ${appointments.length} appointments for reminders`);
+    console.log(`Found ${appointments.length} appointments for reminders: ${appointments.map(a => a._id).join(', ')}`);
 
     const transporter = nodemailer.createTransport({
       service: 'Gmail',
@@ -297,7 +299,7 @@ export const sendAppointmentReminders = async () => {
     for (const appt of appointments) {
       const timeDiff = appt.date - now;
       const is24h = timeDiff >= 22 * 60 * 60 * 1000 && timeDiff <= 26 * 60 * 60 * 1000;
-      const is1h = timeDiff >= 30 * 60 * 1000 && timeDiff <= 2 * 60 * 60 * 1000;
+      const is1h = timeDiff  >= 30 * 60 * 1000 && timeDiff <= 2 * 60 * 60 * 1000;
 
       if (is24h || is1h) {
         const reminderType = is24h ? '24h' : '1h';
@@ -351,5 +353,71 @@ export const sendAppointmentReminders = async () => {
     }
   } catch (error) {
     console.error('❌ Send Reminder Error:', error.message);
+  }
+};
+
+// Generate ICS file for appointment
+export const generateICS = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    const appointment = await Appointment.findById(id)
+      .populate('client', 'username email')
+      .populate('lawyer', 'username email')
+      .populate('case', 'description');
+
+    if (!appointment) {
+      return res.status(404).json({ message: 'Appointment not found' });
+    }
+    if (appointment.client._id.toString() !== userId && appointment.lawyer._id.toString() !== userId) {
+      return res.status(403).json({ message: 'Only the client or lawyer can access this calendar file' });
+    }
+
+    // Prepare ICS event
+    const startDate = new Date(appointment.date);
+    const endDate = new Date(startDate.getTime() + 60 * 60 * 1000); // Assume 1-hour duration
+    const event = {
+      start: [
+        startDate.getFullYear(),
+        startDate.getMonth() + 1,
+        startDate.getDate(),
+        startDate.getHours(),
+        startDate.getMinutes(),
+      ],
+      end: [
+        endDate.getFullYear(),
+        endDate.getMonth() + 1,
+        endDate.getDate(),
+        endDate.getHours(),
+        endDate.getMinutes(),
+      ],
+      title: `${appointment.type} with ${appointment.client.username} and ${appointment.lawyer.username}`,
+      description: `${appointment.description || 'No details provided'}\nCase: ${appointment.case?.description || 'None'}`,
+      location: 'Unified Legal Platform',
+      organizer: { name: 'Unified Legal', email: process.env.EMAIL_HOST_USER },
+      attendees: [
+        { name: appointment.client.username, email: appointment.client.email },
+        { name: appointment.lawyer.username, email: appointment.lawyer.email },
+      ],
+      status: appointment.status === 'Confirmed' ? 'CONFIRMED' : 'TENTATIVE',
+    };
+
+    // Create ICS file
+    const { error, value } = createEvent(event);
+    if (error) {
+      console.error('❌ ICS Creation Error:', error.message);
+      return res.status(500).json({ message: 'Failed to generate calendar file', error: error.message });
+    }
+
+    // Serve ICS file
+    res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename=appointment-${id}.ics`);
+    res.send(value);
+
+    console.log(`📅 ICS file generated for appointment ${id}`);
+  } catch (error) {
+    console.error('❌ Generate ICS Error:', error.message);
+    res.status(500).json({ message: 'Failed to generate calendar file', error: error.message });
   }
 };
