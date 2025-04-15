@@ -14,7 +14,7 @@ const NotificationSchema = new mongoose.Schema({
   },
   type: { 
     type: String, 
-    enum: ['Bid', 'Appointment', 'Chat', 'BidAccepted', 'new_lawyer', 'new_case', 'case_closed'], // Added new_case, case_closed
+    enum: ['Bid', 'Appointment', 'Chat', 'BidAccepted', 'new_lawyer', 'deadline','new_case','form_created','form_signed','note_added', 'case_closed'], // Added new_case, case_closed
     required: true 
   },
   status: { 

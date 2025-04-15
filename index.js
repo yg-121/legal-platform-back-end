@@ -53,12 +53,13 @@ app.use('/api/ratings', ratingRoutes);
 app.use('/api', auditRoutes);
 
 cron.schedule('0 0 * * *', remindPendingRatings);
-cron.schedule('0 * * * *', sendAppointmentReminders); // Every minute for testing
+cron.schedule('0 * * * *', sendAppointmentReminders); // Hourly
 
 app.use('/uploads', express.static(path.join(__dirname, 'Uploads')));
+app.use('/templates', express.static(path.join(__dirname, 'templates')));
 
 app.get('/', (req, res) => {
-  res.json({ message: "🚀 Server is running!" });
+  res.json({ message: '🚀 Server is running!' });
 });
 
 app.use((req, res) => {
