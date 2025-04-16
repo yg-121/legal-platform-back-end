@@ -44,7 +44,8 @@ export const createBid = async (req, res) => {
 export const getCaseBids = async (req, res) => {
     try {
         const { caseId } = req.params;
-        const bids = await Bid.find({ case: caseId }).populate('lawyer', 'username email');
+        const bids = await Bid.find({ case: caseId })
+        .populate('lawyer', 'username averageRating ratingCount email');
         res.json(bids);
     } catch (error) {
         console.error('❌ Fetch Case Bids Error:', error.message);

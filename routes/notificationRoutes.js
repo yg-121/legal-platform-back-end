@@ -1,7 +1,7 @@
 import express from 'express';
 import authMiddleware from '../middlewares/authMiddleware.js';
 import Notification from '../models/Notification.js';
-import { getNotifications } from '../controllers/notificationController.js';
+import { getNotifications ,markNotificationAsRead} from '../controllers/notificationController.js';
 
 const router = express.Router();
 
@@ -18,5 +18,5 @@ router.get('/notifications', authMiddleware(), async (req, res) => {
 
 // New: Admin notifications with counts
 router.get('/admin/notifications', authMiddleware(['Admin']), getNotifications);
-
+router.patch('/notifications/:notificationId/read', authMiddleware(['Admin']), markNotificationAsRead);
 export default router;

@@ -1,15 +1,6 @@
 import User from '../models/User.js';
 import Notification from '../models/Notification.js';
-import nodemailer from 'nodemailer';
-
-const transporter = nodemailer.createTransport({
-  host: process.env.MAILTRAP_HOST,
-  port: process.env.MAILTRAP_PORT,
-  auth: {
-    user: process.env.MAILTRAP_USER,
-    pass: process.env.MAILTRAP_PASS,
-  },
-});
+import { io } from '../index.js';
 
 export const sendNotification = async (userId, message, type) => {
   try {
@@ -27,36 +18,23 @@ export const sendNotification = async (userId, message, type) => {
         type,
       });
       await notification.save();
-      console.log(`Notification saved for ${user.email}: ${message}`);
+      console.log(`Notification saved for ${user.username}: ${message}`);
 
-      const mailOptions = {
-        from: 'test@legalplatform.com',
-        to: user.email,
-        subject: 'Legal Platform Notification',
-        text: message,
-      };
-      await transporter.sendMail(mailOptions);
-      console.log(`Email sent to ${user.email} via Mailtrap`);
+      io.to(userId).emit('new_notification', notification.toObject());
     } else {
       // Handle admin notifications for new_lawyer
       const admins = await User.find({ role: 'Admin' });
       for (const admin of admins) {
         const adminNotification = new Notification({
-          user: admin._id, // Store for each admin
+          user: admin._id,
           message,
           type,
           isAdminNotification: true,
         });
         await adminNotification.save();
+        console.log(`Notification saved for admin ${admin.username}: ${message}`);
 
-        const mailOptions = {
-          from: 'test@legalplatform.com',
-          to: admin.email,
-          subject: 'New Lawyer Registration',
-          text: message,
-        };
-        await transporter.sendMail(mailOptions);
-        console.log(`Email sent to admin ${admin.email} via Mailtrap`);
+        io.to(admin._id.toString()).emit('new_notification', adminNotification.toObject());
       }
     }
   } catch (error) {
