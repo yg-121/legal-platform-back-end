@@ -26,7 +26,7 @@ export const initiateRating = async (caseId, clientId, lawyerId) => {
   }
 };
 
-export const createRating = async ( wreq, res) => {
+export const createRating = async (req, res) => {
   try {
     const { caseId, rating, comment } = req.body;
     const client = req.user.id;
