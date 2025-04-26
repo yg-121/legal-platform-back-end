@@ -190,8 +190,8 @@ export const requestPasswordReset = async (req, res) => {
       },
     });
 
-    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
-    const mailOptions = {
+    const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
+      const mailOptions = {
       to: user.email,
       from: process.env.EMAIL_HOST_USER,
       subject: "Password Reset Request",
