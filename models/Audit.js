@@ -1,15 +1,40 @@
 import mongoose from 'mongoose';
 
 const auditSchema = new mongoose.Schema({
-  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }, // Changed from admin to user
-  action: { 
-    type: String, 
-    enum: ['update_profile', 'change_password', 'delete_user', 'add_admin', 'approve_lawyer', 'reject_lawyer', 'assign_reviewer'], // Added new actions
-    required: true 
+  user: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true // Ensure user is required
   },
-  target: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  details: { type: String },
-  createdAt: { type: Date, default: Date.now },
+  action: {
+    type: String,
+    required: true,
+    enum: [
+      'approve_lawyer',
+      'reject_lawyer',
+      'update_profile',
+      'change_password',
+      'delete_user',
+      'add_admin',
+      'assign_reviewer'
+    ]
+  },
+  target: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  details: {
+    type: String,
+    default: ''
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
+  }
+}, {
+  // Allow population of fields not explicitly defined (e.g., admin)
+  strictPopulate: false
 });
 
 export default mongoose.model('Audit', auditSchema);

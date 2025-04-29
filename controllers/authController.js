@@ -1,10 +1,11 @@
-import { io } from '../index.js'; 
+import { io } from '../index.js';
 import User from "../models/User.js";
 import Notification from "../models/Notification.js";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
 import upload from "../utils/upload.js";
+import { sendNotification } from "../utils/notify.js";
 
 const generateToken = (user) => {
   return jwt.sign(
@@ -16,9 +17,9 @@ const generateToken = (user) => {
 
 export const registerUser = async (req, res) => {
   try {
-    const { 
+    const {
       username, email, password, role, phone, specialization, location,
-      yearsOfExperience, bio, certifications, hourlyRate, languages 
+      yearsOfExperience, bio, certifications, hourlyRate, languages
     } = req.body;
     const license_file = req.file ? req.file.path : null;
 
@@ -40,12 +41,12 @@ export const registerUser = async (req, res) => {
     let specializationArray;
     if (role === "Lawyer") {
       if (Array.isArray(specialization)) {
-        specializationArray = specialization; // Already an array from Postman
+        specializationArray = specialization;
       } else if (typeof specialization === 'string') {
-        specializationArray = specialization.split(',').map(s => s.trim()); // Split comma-separated string
+        specializationArray = specialization.split(',').map(s => s.trim());
       } else {
-        return res.status(400).json({ 
-          message: "Specialization must be a string (e.g., 'Family Law, Criminal Law') or an array (e.g., ['Family Law', 'Criminal Law'])" 
+        return res.status(400).json({
+          message: "Specialization must be a string (e.g., 'Family Law, Criminal Law') or an array (e.g., ['Family Law', 'Criminal Law'])"
         });
       }
 
@@ -56,7 +57,7 @@ export const registerUser = async (req, res) => {
       ];
       const invalidSpecializations = specializationArray.filter(s => !validSpecializations.includes(s));
       if (invalidSpecializations.length > 0) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           message: `Invalid specialization values: ${invalidSpecializations.join(', ')}. Valid options: ${validSpecializations.join(', ')}`
         });
       }
@@ -80,35 +81,12 @@ export const registerUser = async (req, res) => {
     await newUser.save();
 
     if (role === "Lawyer") {
-      const notification = new Notification({
-        message: `New lawyer registered: ${username} (${newUser.specialization.join(', ')})`,
-        type: "new_lawyer",
-        user: null,
-        isAdminNotification: true,
-      });
-      await notification.save();
-      io.emit('new_admin_notification', notification.toObject());
-
-      const admins = await User.find({ role: "Admin" });
-      const transporter = nodemailer.createTransport({
-        service: "Gmail",
-        auth: {
-          user: process.env.EMAIL_HOST_USER,
-          pass: process.env.EMAIL_HOST_PASSWORD,
-        },
-      });
-
-      const dashboardUrl = `${process.env.FRONTEND_URL}/admin`;
-      for (const admin of admins) {
-        const mailOptions = {
-          to: admin.email,
-          from: process.env.EMAIL_HOST_USER,
-          subject: "New Lawyer Registration - Review Required",
-          text: `A new lawyer has registered:\n\nUsername: ${username}\nEmail: ${email}\nSpecialization: ${newUser.specialization.join(', ')}\nLocation: ${location}\nYears of Experience: ${yearsOfExperience}\n\nReview and approve/reject in the dashboard: ${dashboardUrl}`,
-        };
-        await transporter.sendMail(mailOptions);
-        console.log(`✅ Notification email sent to admin ${admin.username} (${admin.email})`);
-      }
+      // Use sendNotification to notify LegalReviewers
+      await sendNotification(
+        null,
+        `New lawyer registered: ${username} (${newUser.specialization.join(', ')})`,
+        'new_lawyer'
+      );
     }
 
     res.status(201).json({
@@ -128,7 +106,6 @@ export const registerUser = async (req, res) => {
 
 export const registerUserWithUpload = [upload, registerUser];
 
-// loginUser, requestPasswordReset, resetPassword remain unchanged
 export const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -191,7 +168,7 @@ export const requestPasswordReset = async (req, res) => {
     });
 
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
-      const mailOptions = {
+    const mailOptions = {
       to: user.email,
       from: process.env.EMAIL_HOST_USER,
       subject: "Password Reset Request",

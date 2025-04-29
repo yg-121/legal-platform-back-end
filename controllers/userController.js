@@ -380,7 +380,7 @@ export const deleteUser = async (req, res) => {
     await User.deleteOne({ _id: userId });
 
     await new Audit({
-      admin: req.user.id,
+      user: req.user.id,
       action: 'delete_user',
       target: userId,
     }).save();
