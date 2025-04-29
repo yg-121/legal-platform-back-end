@@ -1,37 +1,15 @@
 import mongoose from 'mongoose';
 
-const AuditSchema = new mongoose.Schema({
-  admin: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'User', 
-    required: true 
-  },
+const auditSchema = new mongoose.Schema({
+  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }, // Changed from admin to user
   action: { 
     type: String, 
-    required: true,
-    enum: [
-      'approve_lawyer', 
-      'reject_lawyer', 
-      'delete_user', 
-      'add_admin', 
-      'update_profile', 
-      'change_password', 
-      'close_case' 
-    ] 
+    enum: ['update_profile', 'change_password', 'delete_user', 'add_admin', 'approve_lawyer', 'reject_lawyer', 'assign_reviewer'], // Added new actions
+    required: true 
   },
-  target: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'User', 
-    required: false // Optional for actions not targeting a user (e.g., case-related)
-  },
-  details: { 
-    type: String, 
-    required: false // Extra info (e.g., case ID)
-  },
-  createdAt: { 
-    type: Date, 
-    default: Date.now 
-  }
+  target: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  details: { type: String },
+  createdAt: { type: Date, default: Date.now },
 });
 
-export default mongoose.model('Audit', AuditSchema);
+export default mongoose.model('Audit', auditSchema);

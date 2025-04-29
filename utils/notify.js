@@ -5,7 +5,7 @@ import { io } from '../index.js';
 export const sendNotification = async (userId, message, type) => {
   try {
     // Handle user-specific notifications
-    if (type !== 'new_lawyer') {
+    if (!['new_lawyer', 'lawyer_approved_admin', 'lawyer_rejected_admin', 'reviewer_assigned_admin'].includes(type)) {
       const user = await User.findById(userId);
       if (!user) {
         console.error('User not found for notification');
@@ -22,7 +22,7 @@ export const sendNotification = async (userId, message, type) => {
 
       io.to(userId).emit('new_notification', notification.toObject());
     } else {
-      // Handle admin notifications for new_lawyer
+      // Handle admin notifications for new_lawyer, lawyer_approved_admin, lawyer_rejected_admin, reviewer_assigned_admin
       const admins = await User.find({ role: 'Admin' });
       for (const admin of admins) {
         const adminNotification = new Notification({

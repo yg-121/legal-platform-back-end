@@ -3,12 +3,12 @@ import Audit from '../models/Audit.js';
 export const getAuditLogs = async (req, res) => {
   try {
     const logs = await Audit.find()
-      .populate('admin', 'username email')
-      .populate('target', 'username email')
+      .populate('admin', 'username role') // Changed to user for LegalReviewer
+      .populate('target', 'username')
       .sort({ createdAt: -1 });
-    res.json({ message: 'Audit logs fetched', logs });
+    res.json(logs);
   } catch (error) {
-    console.error('❌ Fetch Audit Logs Error:', error.message);
+    console.error('❌ Get Audit Logs Error:', error.message);
     res.status(500).json({ message: 'Server Error', error: error.message });
   }
 };

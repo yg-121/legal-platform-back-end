@@ -16,12 +16,14 @@ import {
   getLawyerProfile,
   getClientDashboard, 
   getLawyerDashboard,
+  assignReviewer,
+  getPendingReviews
 } from '../controllers/userController.js';
 
 const router = express.Router();
 
-router.put('/approve-lawyer', authMiddleware(['Admin']), approveLawyer);
-router.put('/reject-lawyer', authMiddleware(['Admin']), rejectLawyer);
+router.put('/approve-lawyer', authMiddleware(['LegalReviewer']), approveLawyer);
+router.put('/reject-lawyer', authMiddleware(['LegalReviewer']), rejectLawyer);
 router.put('/profile', authMiddleware(['Lawyer']), updateProfileWithUpload);
 router.put('/admin/profile', authMiddleware(['Admin']), updateAdminProfileWithUpload);
 router.get('/admin/profile', authMiddleware(['Admin']), getAdminProfile);
@@ -31,6 +33,8 @@ router.get('/filter', authMiddleware(['Admin']), filterUsers);
 router.get('/pending-lawyers', authMiddleware(['Admin']), getPendingLawyers);
 router.delete('/:userId', authMiddleware(['Admin']), deleteUser);
 router.post('/add-admin', authMiddleware(['Admin']), addAdmin);
+router.post('/assign-reviewer', authMiddleware(['Admin']), assignReviewer); 
+router.get('/pending-reviews', authMiddleware(['LegalReviewer']), getPendingReviews);
 router.get('/lawyers', authMiddleware(['Client']), getLawyers);
 router.get('/lawyers/:lawyerId', getLawyerProfile); // New public endpoint
 router.get('/dashboard/client', authMiddleware(['Client']), getClientDashboard);

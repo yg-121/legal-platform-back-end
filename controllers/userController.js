@@ -37,7 +37,7 @@ export const getAdminProfile = async (req, res) => {
 
 export const approveLawyer = async (req, res) => {
   try {
-    const { lawyerId } = req.body;
+    const { lawyerId, comments } = req.body;
     if (!lawyerId) return res.status(400).json({ message: 'Lawyer ID is required' });
 
     const lawyer = await User.findById(lawyerId);
@@ -47,14 +47,16 @@ export const approveLawyer = async (req, res) => {
     lawyer.status = 'Active';
     lawyer.verificationStatus = 'Verified';
     await lawyer.save();
-    // Audit log
 
+    // Audit log
     await new Audit({
-      admin: req.user.id,
+      user: req.user.id, // Changed from admin to user for LegalReviewer
       action: 'approve_lawyer',
       target: lawyerId,
+      details: comments || 'No comments provided',
     }).save();
-  // Notify lawyer via email
+
+    // Notify lawyer via email
     const transporter = nodemailer.createTransport({
       service: "Gmail",
       auth: {
@@ -72,6 +74,28 @@ export const approveLawyer = async (req, res) => {
 
     await transporter.sendMail(mailOptions);
     console.log(`✅ Approval email sent to ${lawyer.email}`);
+
+    // Notify Admins via notification and email
+    const admins = await User.find({ role: 'Admin' });
+    for (const admin of admins) {
+      const notification = new Notification({
+        user: admin._id,
+        message: `Lawyer ${lawyer.username} approved by ${req.user.username}. Comments: ${comments || 'None'}`,
+        type: 'lawyer_approved_admin',
+        isAdminNotification: true,
+      });
+      await notification.save();
+      io.to(admin._id.toString()).emit('new_admin_notification', notification.toObject());
+
+      const adminMailOptions = {
+        to: admin.email,
+        from: process.env.EMAIL_HOST_USER,
+        subject: "Lawyer Approval Notification",
+        text: `Dear ${admin.username},\n\nLawyer ${lawyer.username} has been approved by ${req.user.username}. Comments: ${comments || 'None'}.\n\nView details at: ${process.env.FRONTEND_URL}/admin`,
+      };
+      await transporter.sendMail(adminMailOptions);
+      console.log(`✅ Admin approval email sent to ${admin.email}`);
+    }
 
     res.json({
       message: 'Lawyer approved',
@@ -93,7 +117,7 @@ export const approveLawyer = async (req, res) => {
 
 export const rejectLawyer = async (req, res) => {
   try {
-    const { lawyerId, reason } = req.body;
+    const { lawyerId, comments } = req.body; // Changed from reason to comments
     if (!lawyerId) return res.status(400).json({ message: 'Lawyer ID is required' });
 
     const lawyer = await User.findById(lawyerId);
@@ -103,13 +127,15 @@ export const rejectLawyer = async (req, res) => {
     lawyer.status = 'Rejected';
     lawyer.verificationStatus = 'Rejected';
     await lawyer.save();
+
     // Audit log
     await new Audit({
-      admin: req.user.id,
+      user: req.user.id, // Changed from admin to user
       action: 'reject_lawyer',
       target: lawyerId,
-      details: reason || 'No reason provided'
+      details: comments || 'No reason provided',
     }).save();
+
     // Notify lawyer via email
     const transporter = nodemailer.createTransport({
       service: "Gmail",
@@ -123,11 +149,33 @@ export const rejectLawyer = async (req, res) => {
       to: lawyer.email,
       from: process.env.EMAIL_HOST_USER,
       subject: "Your Lawyer Account Registration",
-      text: `Dear ${lawyer.username},\n\nYour lawyer account registration was rejected. Reason: ${reason || 'Not specified'}. Please update your details and reapply.\n\nThank you for your interest.`,
+      text: `Dear ${lawyer.username},\n\nYour lawyer account registration was rejected. Reason: ${comments || 'Not specified'}. Please update your details and reapply.\n\nThank you for your interest.`,
     };
 
     await transporter.sendMail(mailOptions);
     console.log(`✅ Rejection email sent to ${lawyer.email}`);
+
+    // Notify Admins via notification and email
+    const admins = await User.find({ role: 'Admin' });
+    for (const admin of admins) {
+      const notification = new Notification({
+        user: admin._id,
+        message: `Lawyer ${lawyer.username} rejected by ${req.user.username}. Reason: ${comments || 'None'}`,
+        type: 'lawyer_rejected_admin',
+        isAdminNotification: true,
+      });
+      await notification.save();
+      io.to(admin._id.toString()).emit('new_admin_notification', notification.toObject());
+
+      const adminMailOptions = {
+        to: admin.email,
+        from: process.env.EMAIL_HOST_USER,
+        subject: "Lawyer Rejection Notification",
+        text: `Dear ${admin.username},\n\nLawyer ${lawyer.username} has been rejected by ${req.user.username}. Reason: ${comments || 'None'}.\n\nView details at: ${process.env.FRONTEND_URL}/admin`,
+      };
+      await transporter.sendMail(adminMailOptions);
+      console.log(`✅ Admin rejection email sent to ${admin.email}`);
+    }
 
     res.json({
       message: 'Lawyer rejected',
@@ -146,7 +194,7 @@ export const rejectLawyer = async (req, res) => {
     res.status(500).json({ message: 'Server Error', error: error.message });
   }
 };
-// Rest of your code (updateProfile, updateAdminProfile, etc.) remains unchanged
+
 export const updateProfile = async (req, res) => {
   try {
     const { 
@@ -223,7 +271,6 @@ export const updateProfile = async (req, res) => {
 
 export const updateProfileWithUpload = [profileUpload, updateProfile];
 
-// Other admin functions remain unchanged
 export const updateAdminProfile = async (req, res) => {
   try {
     const { username, email, phone } = req.body;
@@ -425,7 +472,6 @@ export const getLawyerProfile = async (req, res) => {
   }
 };
 
-// Client and Lawyer Dashboards remain unchanged
 export const getClientDashboard = async (req, res) => {
   try {
     const clientId = req.user.id;
@@ -504,6 +550,92 @@ export const getLawyerDashboard = async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Lawyer Dashboard Error:', error.message);
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
+export const getPendingReviews = async (req, res) => {
+  try {
+    const pendingLawyers = await User.find({ role: 'Lawyer', status: 'Pending' })
+      .select('username email license_file specialization verificationStatus');
+    res.json({ message: 'Pending reviews fetched', pendingLawyers });
+  } catch (error) {
+    console.error('❌ Get Pending Reviews Error:', error.message);
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
+export const assignReviewer = async (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ message: 'User ID is required' });
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (user.role === 'LegalReviewer') return res.status(400).json({ message: 'User is already a Legal Reviewer' });
+
+    user.role = 'LegalReviewer';
+    user.status = 'Active';
+    await user.save();
+
+    // Notify the new LegalReviewer
+    const notification = new Notification({
+      user: user._id,
+      message: 'You have been assigned as a Legal Reviewer.',
+      type: 'role_assigned',
+    });
+    await notification.save();
+    io.to(user._id.toString()).emit('new_notification', notification.toObject());
+
+    // Audit log
+    await new Audit({
+      user: req.user.id,
+      action: 'assign_reviewer',
+      target: userId,
+      details: `Assigned ${user.username} as Legal Reviewer`,
+    }).save();
+
+    // Notify Admins
+    const admins = await User.find({ role: 'Admin' });
+    const transporter = nodemailer.createTransport({
+      service: "Gmail",
+      auth: {
+        user: process.env.EMAIL_HOST_USER,
+        pass: process.env.EMAIL_HOST_PASSWORD,
+      },
+    });
+    for (const admin of admins) {
+      const adminNotification = new Notification({
+        user: admin._id,
+        message: `User ${user.username} assigned as Legal Reviewer by ${req.user.username}.`,
+        type: 'reviewer_assigned_admin',
+        isAdminNotification: true,
+      });
+      await adminNotification.save();
+      io.to(admin._id.toString()).emit('new_admin_notification', adminNotification.toObject());
+
+      const adminMailOptions = {
+        to: admin.email,
+        from: process.env.EMAIL_HOST_USER,
+        subject: "Legal Reviewer Assignment Notification",
+        text: `Dear ${admin.username},\n\nUser ${user.username} has been assigned as a Legal Reviewer by ${req.user.username}.\n\nView details at: ${process.env.FRONTEND_URL}/admin`,
+      };
+      await transporter.sendMail(adminMailOptions);
+      console.log(`✅ Admin reviewer assignment email sent to ${admin.email}`);
+    }
+
+    res.json({
+      message: 'User assigned as Legal Reviewer successfully',
+      user: {
+        _id: user._id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        status: user.status,
+      },
+    });
+  } catch (error) {
+    console.error('❌ Assign Reviewer Error:', error.message);
     res.status(500).json({ message: 'Server Error', error: error.message });
   }
 };

@@ -7,7 +7,7 @@ const UserSchema = new mongoose.Schema({
   password: { type: String, required: true, minlength: 8 },
   resetPasswordToken: { type: String },
   resetPasswordExpires: { type: Number },
-  role: { type: String, enum: ['Client', 'Lawyer', 'Admin'], required: true },
+  role: { type: String, enum: ['Client', 'Lawyer', 'Admin','LegalReviewer'], required: true },
   phone: { type: String, required: false },
   license_file: { type: String, required: function() { return this.role === 'Lawyer'; } },
   profile_photo: { type: String, required: false },

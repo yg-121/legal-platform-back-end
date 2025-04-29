@@ -14,7 +14,7 @@ const NotificationSchema = new mongoose.Schema({
   },
   type: { 
     type: String, 
-    enum: ['Bid', 'Appointment', 'Chat', 'BidAccepted', 'new_lawyer', 'deadline','new_case','form_created','form_signed','note_added', 'case_closed'], // Added new_case, case_closed
+    enum: ['Bid', 'Appointment', 'Chat', 'BidAccepted', 'new_lawyer', 'deadline', 'new_case', 'form_created', 'form_signed', 'note_added', 'case_closed', 'lawyer_approved_admin', 'lawyer_rejected_admin', 'reviewer_assigned_admin', 'role_assigned'], // Added role_assigned
     required: true 
   },
   status: { 
@@ -29,7 +29,7 @@ const NotificationSchema = new mongoose.Schema({
   isAdminNotification: { 
     type: Boolean, 
     default: function() { 
-      return this.type === 'new_lawyer'; // Only true for new_lawyer (admin-specific)
+      return ['new_lawyer', 'lawyer_approved_admin', 'lawyer_rejected_admin', 'reviewer_assigned_admin'].includes(this.type); // Unchanged
     } 
   }
 });
