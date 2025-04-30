@@ -53,14 +53,14 @@ export const approveLawyer = async (req, res) => {
     lawyer.status = 'Active';
     lawyer.verificationStatus = 'Verified';
     await lawyer.save();
-// Audit log
+
     await new Audit({
       user: req.user.id,
       action: 'approve_lawyer',
       target: lawyerId,
       details: comments || 'No comments provided',
     }).save();
- // Notify lawyer via email
+
     const transporter = nodemailer.createTransport({
       service: "Gmail",
       auth: {
@@ -78,7 +78,6 @@ export const approveLawyer = async (req, res) => {
 
     await transporter.sendMail(mailOptions);
     console.log(`✅ Approval email sent to ${lawyer.email}`);
-    // Notify Admins via notification and email
 
     const admins = await User.find({ role: 'Admin' });
     for (const admin of admins) {
@@ -131,14 +130,13 @@ export const rejectLawyer = async (req, res) => {
     lawyer.status = 'Rejected';
     lawyer.verificationStatus = 'Rejected';
     await lawyer.save();
- // Audit log
+
     await new Audit({
       user: req.user.id,
       action: 'reject_lawyer',
       target: lawyerId,
       details: comments || 'No reason provided',
     }).save();
-    // Notify lawyer via email
 
     const transporter = nodemailer.createTransport({
       service: "Gmail",
@@ -157,7 +155,6 @@ export const rejectLawyer = async (req, res) => {
 
     await transporter.sendMail(mailOptions);
     console.log(`✅ Rejection email sent to ${lawyer.email}`);
-    // Notify Admins via notification and email
 
     const admins = await User.find({ role: 'Admin' });
     for (const admin of admins) {
@@ -200,6 +197,7 @@ export const rejectLawyer = async (req, res) => {
 
 export const updateLawyerProfile = async (req, res) => {
   try {
+    console.log('req.file:', req.file);
     const userId = req.user.id;
     const {
       username,
@@ -255,7 +253,7 @@ export const updateLawyerProfile = async (req, res) => {
 
     if (profilePhoto) {
       if (user.profile_photo) {
-        const oldPhotoPath = path.join(__dirname, '../uploads/profiles', user.profile_photo);
+        const oldPhotoPath = path.join(__dirname, '../Uploads/profiles', user.profile_photo);
         if (fs.existsSync(oldPhotoPath)) {
           fs.unlinkSync(oldPhotoPath);
         }
@@ -318,8 +316,16 @@ export const updateLawyerProfile = async (req, res) => {
       updatedFields.status = 'Pending';
     }
 
-    Object.assign(user, updatedFields);
-    await user.save();
+    console.log('updatedFields:', updatedFields);
+    console.log('user before update:', user);
+
+    await User.updateOne(
+      { _id: userId },
+      { $set: updatedFields }
+    );
+
+    const updatedUser = await User.findById(userId).select('-password');
+    console.log('user after update:', updatedUser);
 
     await Audit.create({
       user: userId,
@@ -362,7 +368,6 @@ export const updateLawyerProfile = async (req, res) => {
       }
     }
 
-    const updatedUser = await User.findById(userId).select('-password');
     res.json({ message: 'Lawyer profile updated successfully', user: updatedUser });
   } catch (error) {
     console.error('❌ Update Lawyer Profile Error:', error.message);
@@ -444,34 +449,112 @@ export const changeLawyerPassword = async (req, res) => {
 
 export const updateAdminProfile = async (req, res) => {
   try {
+    const userId = req.user.id;
     const { username, email, phone } = req.body;
-    const profile_photo = req.file ? req.file.path : null;
-    const user = await User.findById(req.user.id);
+    const profilePhoto = req.file;
 
-    if (!user || user.role !== 'Admin') return res.status(403).json({ message: 'Admin access required' });
+    if (req.user.role !== 'Admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
 
-    if (username) user.username = username;
-    if (email) user.email = email;
-    if (phone) user.phone = phone;
-    if (profile_photo) user.profile_photo = profile_photo;
-    await user.save();
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
 
-    await new Audit({
-      admin: req.user.id,
+    const updatedFields = {};
+
+    if (username) {
+      if (username.length < 3 || username.length > 30) {
+        return res.status(400).json({ message: 'Username must be between 3 and 30 characters' });
+      }
+      const existingUsername = await User.findOne({ username, _id: { $ne: userId } });
+      if (existingUsername) {
+        return res.status(409).json({ message: 'Username already taken' });
+      }
+      updatedFields.username = username;
+    }
+
+    if (email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({ message: 'Invalid email format' });
+      }
+      const existingEmail = await User.findOne({ email, _id: { $ne: userId } });
+      if (existingEmail) {
+        return res.status(409).json({ message: 'Email already in use' });
+      }
+      updatedFields.email = email;
+    }
+
+    if (phone) {
+      const phoneRegex = /^\+?[\d\s-]{7,15}$/;
+      if (!phoneRegex.test(phone)) {
+        return res.status(400).json({ message: 'Invalid phone number format' });
+      }
+      updatedFields.phone = phone;
+    }
+
+    if (profilePhoto) {
+      if (user.profile_photo) {
+        const oldPhotoPath = path.join(__dirname, '../Uploads/profiles', user.profile_photo);
+        if (fs.existsSync(oldPhotoPath)) {
+          fs.unlinkSync(oldPhotoPath);
+        }
+      }
+      updatedFields.profile_photo = profilePhoto.filename;
+    }
+
+    console.log('updatedFields:', updatedFields);
+
+    await User.updateOne(
+      { _id: userId },
+      { $set: updatedFields }
+    );
+
+    const updatedUser = await User.findById(userId).select('-password');
+
+    await Audit.create({
+      user: userId,
       action: 'update_profile',
-      target: req.user.id,
-    }).save();
+      target: userId,
+      details: JSON.stringify({ updatedFields })
+    });
+
+    if (email) {
+      const admins = await User.find({ role: 'Admin', _id: { $ne: userId } });
+      const transporter = nodemailer.createTransport({
+        service: 'Gmail',
+        auth: {
+          user: process.env.EMAIL_HOST_USER,
+          pass: process.env.EMAIL_HOST_PASSWORD,
+        },
+      });
+
+      for (const admin of admins) {
+        const notification = new Notification({
+          user: admin._id,
+          message: `Admin ${updatedUser.username} updated their email to ${email}.`,
+          type: 'admin_profile_update',
+          isAdminNotification: true,
+        });
+        await notification.save();
+        io.to(admin._id.toString()).emit('new_admin_notification', notification.toObject());
+
+        const adminMailOptions = {
+          to: admin.email,
+          from: process.env.EMAIL_HOST_USER,
+          subject: 'Admin Profile Update Notification',
+          text: `Dear ${admin.username},\n\nAdmin ${updatedUser.username} has updated their email to ${email}.\n\nView details at: ${process.env.FRONTEND_URL}/admin`,
+        };
+        await transporter.sendMail(adminMailOptions);
+        console.log(`✅ Admin notification email sent to ${admin.email}`);
+      }
+    }
 
     res.json({
-      message: 'Admin profile updated',
-      user: {
-        _id: user._id,
-        username: user.username,
-        email: user.email,
-        phone: user.phone,
-        role: user.role,
-        profile_photo: user.profile_photo,
-      },
+      message: 'Admin profile updated successfully',
+      user: updatedUser
     });
   } catch (error) {
     console.error('❌ Update Admin Profile Error:', error.message);
@@ -483,25 +566,70 @@ export const updateAdminProfileWithUpload = [profileUpload, updateAdminProfile];
 
 export const changeAdminPassword = async (req, res) => {
   try {
+    const userId = req.user.id;
     const { currentPassword, newPassword } = req.body;
-    const user = await User.findById(req.user.id);
 
-    if (!user || user.role !== 'Admin') return res.status(403).json({ message: 'Admin access required' });
-    if (!currentPassword || !newPassword) return res.status(400).json({ message: 'Current and new passwords are required' });
-    if (!(await user.comparePassword(currentPassword))) return res.status(401).json({ message: 'Current password is incorrect' });
+    if (req.user.role !== 'Admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: 'Current and new passwords are required' });
+    }
+    if (!(await user.comparePassword(currentPassword))) {
+      return res.status(401).json({ message: 'Current password is incorrect' });
+    }
+    if (newPassword.length < 8) {
+      return res.status(400).json({ message: 'New password must be at least 8 characters' });
+    }
 
     user.password = newPassword;
     await user.save();
 
-    await new Audit({
-      admin: req.user.id,
+    await Audit.create({
+      user: userId,
       action: 'change_password',
-      target: req.user.id,
-    }).save();
+      target: userId,
+      details: JSON.stringify({ message: 'Admin changed their password' })
+    });
+
+    const admins = await User.find({ role: 'Admin', _id: { $ne: userId } });
+    const transporter = nodemailer.createTransport({
+      service: 'Gmail',
+      auth: {
+        user: process.env.EMAIL_HOST_USER,
+        pass: process.env.EMAIL_HOST_PASSWORD,
+      },
+    });
+
+    for (const admin of admins) {
+      const notification = new Notification({
+        user: admin._id,
+        message: `Admin ${user.username} changed their password.`,
+        type: 'admin_password_change',
+        isAdminNotification: true,
+      });
+      await notification.save();
+      io.to(admin._id.toString()).emit('new_admin_notification', notification.toObject());
+
+      const adminMailOptions = {
+        to: admin.email,
+        from: process.env.EMAIL_HOST_USER,
+        subject: 'Admin Password Change Notification',
+        text: `Dear ${admin.username},\n\nAdmin ${user.username} has changed their password.\n\nView details at: ${process.env.FRONTEND_URL}/admin`,
+      };
+      await transporter.sendMail(adminMailOptions);
+      console.log(`✅ Admin notification email sent to ${admin.email}`);
+    }
 
     res.json({ message: 'Password updated successfully' });
   } catch (error) {
-    console.error('❌ Change Password Error:', error.message);
+    console.error('❌ Change Admin Password Error:', error.message);
     res.status(500).json({ message: 'Server Error', error: error.message });
   }
 };
@@ -779,7 +907,7 @@ export const assignReviewer = async (req, res) => {
         type: 'reviewer_assigned_admin',
         isAdminNotification: true,
       });
-      await adminNotification.save();
+      await notification.save();
       io.to(admin._id.toString()).emit('new_admin_notification', adminNotification.toObject());
 
       const adminMailOptions = {
@@ -823,6 +951,8 @@ export const updateClientProfile = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
+    const updatedFields = {};
+
     if (username) {
       if (username.length < 3 || username.length > 30) {
         return res.status(400).json({ message: 'Username must be between 3 and 30 characters' });
@@ -831,7 +961,7 @@ export const updateClientProfile = async (req, res) => {
       if (existingUsername) {
         return res.status(409).json({ message: 'Username already taken' });
       }
-      user.username = username;
+      updatedFields.username = username;
     }
 
     if (email) {
@@ -843,32 +973,33 @@ export const updateClientProfile = async (req, res) => {
       if (existingEmail) {
         return res.status(409).json({ message: 'Email already in use' });
       }
-      user.email = email;
+      updatedFields.email = email;
     }
 
     if (profilePhoto) {
       if (user.profile_photo) {
-        const oldPhotoPath = path.join(__dirname, '../uploads/profiles', user.profile_photo);
+        const oldPhotoPath = path.join(__dirname, '../Uploads/profiles', user.profile_photo);
         if (fs.existsSync(oldPhotoPath)) {
           fs.unlinkSync(oldPhotoPath);
         }
       }
-      user.profile_photo = profilePhoto.filename;
+      updatedFields.profile_photo = profilePhoto.filename;
     }
 
-    await user.save();
+    console.log('updatedFields:', updatedFields);
+
+    await User.updateOne(
+      { _id: userId },
+      { $set: updatedFields }
+    );
+
+    const updatedUser = await User.findById(userId).select('-password');
 
     await Audit.create({
       user: userId,
       action: 'update_profile',
       target: userId,
-      details: JSON.stringify({
-        updatedFields: {
-          username: username || undefined,
-          email: email || undefined,
-          profile_photo: profilePhoto ? profilePhoto.filename : undefined,
-        },
-      }),
+      details: JSON.stringify({ updatedFields })
     });
 
     if (email) {
@@ -884,7 +1015,7 @@ export const updateClientProfile = async (req, res) => {
       for (const admin of admins) {
         const notification = new Notification({
           user: admin._id,
-          message: `Client ${user.username} updated their email to ${email}.`,
+          message: `Client ${updatedUser.username} updated their email to ${email}.`,
           type: 'client_profile_update',
           isAdminNotification: true,
         });
@@ -895,14 +1026,13 @@ export const updateClientProfile = async (req, res) => {
           to: admin.email,
           from: process.env.EMAIL_HOST_USER,
           subject: 'Client Profile Update Notification',
-          text: `Dear ${admin.username},\n\nClient ${user.username} has updated their email to ${email}.\n\nView details at: ${process.env.FRONTEND_URL}/admin`,
+          text: `Dear ${admin.username},\n\nClient ${updatedUser.username} has updated their email to ${email}.\n\nView details at: ${process.env.FRONTEND_URL}/admin`,
         };
         await transporter.sendMail(adminMailOptions);
         console.log(`✅ Admin notification email sent to ${admin.email}`);
       }
     }
 
-    const updatedUser = await User.findById(userId).select('-password');
     res.json({ message: 'Client profile updated successfully', user: updatedUser });
   } catch (error) {
     console.error('❌ Update Client Profile Error:', error.message);
@@ -943,7 +1073,7 @@ export const changeClientPassword = async (req, res) => {
       user: userId,
       action: 'change_password',
       target: userId,
-      details: JSON.stringify({ message: 'Client changed their password' }),
+      details: JSON.stringify({ message: 'Client changed their password' })
     });
 
     const admins = await User.find({ role: 'Admin' });
