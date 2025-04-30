@@ -1,5 +1,5 @@
 import User from '../models/User.js';
-import Audit from '../models/Audit.js'; 
+import Audit from '../models/Audit.js';
 import authMiddleware from '../middlewares/authMiddleware.js';
 import profileUpload from '../utils/profileUpload.js';
 import nodemailer from 'nodemailer';
@@ -53,16 +53,14 @@ export const approveLawyer = async (req, res) => {
     lawyer.status = 'Active';
     lawyer.verificationStatus = 'Verified';
     await lawyer.save();
-
-    // Audit log
+// Audit log
     await new Audit({
-      user: req.user.id, // Changed from admin to user for LegalReviewer
+      user: req.user.id,
       action: 'approve_lawyer',
       target: lawyerId,
       details: comments || 'No comments provided',
     }).save();
-
-    // Notify lawyer via email
+ // Notify lawyer via email
     const transporter = nodemailer.createTransport({
       service: "Gmail",
       auth: {
@@ -80,8 +78,8 @@ export const approveLawyer = async (req, res) => {
 
     await transporter.sendMail(mailOptions);
     console.log(`✅ Approval email sent to ${lawyer.email}`);
-
     // Notify Admins via notification and email
+
     const admins = await User.find({ role: 'Admin' });
     for (const admin of admins) {
       const notification = new Notification({
@@ -123,7 +121,7 @@ export const approveLawyer = async (req, res) => {
 
 export const rejectLawyer = async (req, res) => {
   try {
-    const { lawyerId, comments } = req.body; // Changed from reason to comments
+    const { lawyerId, comments } = req.body;
     if (!lawyerId) return res.status(400).json({ message: 'Lawyer ID is required' });
 
     const lawyer = await User.findById(lawyerId);
@@ -133,16 +131,15 @@ export const rejectLawyer = async (req, res) => {
     lawyer.status = 'Rejected';
     lawyer.verificationStatus = 'Rejected';
     await lawyer.save();
-
-    // Audit log
+ // Audit log
     await new Audit({
-      user: req.user.id, // Changed from admin to user
+      user: req.user.id,
       action: 'reject_lawyer',
       target: lawyerId,
       details: comments || 'No reason provided',
     }).save();
-
     // Notify lawyer via email
+
     const transporter = nodemailer.createTransport({
       service: "Gmail",
       auth: {
@@ -160,8 +157,8 @@ export const rejectLawyer = async (req, res) => {
 
     await transporter.sendMail(mailOptions);
     console.log(`✅ Rejection email sent to ${lawyer.email}`);
-
     // Notify Admins via notification and email
+
     const admins = await User.find({ role: 'Admin' });
     for (const admin of admins) {
       const notification = new Notification({
@@ -201,36 +198,120 @@ export const rejectLawyer = async (req, res) => {
   }
 };
 
-export const updateProfile = async (req, res) => {
+export const updateLawyerProfile = async (req, res) => {
   try {
-    const { 
-      phone, password, specialization, location, yearsOfExperience, 
-      bio, certifications, hourlyRate, languages, isAvailable 
+    const userId = req.user.id;
+    const {
+      username,
+      email,
+      specialization,
+      location,
+      yearsOfExperience,
+      bio,
+      certifications,
+      hourlyRate,
+      languages,
+      isAvailable
     } = req.body;
-    const profile_photo = req.file ? req.file.path : null;
+    const profilePhoto = req.file;
 
-    const user = await User.findById(req.user.id);
-    if (!user) return res.status(404).json({ message: 'User not found' });
-    if (user.role !== 'Lawyer') return res.status(403).json({ message: 'Only lawyers can update this profile' });
-    if (user.status !== 'Active') return res.status(403).json({ message: 'Account must be Active to update profile' });
+    if (req.user.role !== 'Lawyer') {
+      return res.status(403).json({ message: 'Only Lawyers can update their profile' });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    if (user.status !== 'Active') {
+      return res.status(403).json({ message: 'Account must be Active to update profile' });
+    }
 
     const updatedFields = {};
     let requiresReverification = false;
 
-    if (phone) updatedFields.phone = phone;
-    if (password) updatedFields.password = password;
-    if (profile_photo) updatedFields.profile_photo = profile_photo;
+    if (username) {
+      if (username.length < 3 || username.length > 30) {
+        return res.status(400).json({ message: 'Username must be between 3 and 30 characters' });
+      }
+      const existingUsername = await User.findOne({ username, _id: { $ne: userId } });
+      if (existingUsername) {
+        return res.status(409).json({ message: 'Username already taken' });
+      }
+      updatedFields.username = username;
+    }
+
+    if (email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({ message: 'Invalid email format' });
+      }
+      const existingEmail = await User.findOne({ email, _id: { $ne: userId } });
+      if (existingEmail) {
+        return res.status(409).json({ message: 'Email already in use' });
+      }
+      updatedFields.email = email;
+    }
+
+    if (profilePhoto) {
+      if (user.profile_photo) {
+        const oldPhotoPath = path.join(__dirname, '../uploads/profiles', user.profile_photo);
+        if (fs.existsSync(oldPhotoPath)) {
+          fs.unlinkSync(oldPhotoPath);
+        }
+      }
+      updatedFields.profile_photo = profilePhoto.filename;
+    }
+
     if (specialization) {
-      updatedFields.specialization = Array.isArray(specialization) ? specialization : [specialization];
+      const specializations = Array.isArray(specialization) ? specialization : [specialization];
+      const validSpecializations = [
+        'Criminal Law', 'Family Law', 'Corporate Law', 'Immigration', 'Personal Injury',
+        'Real Estate', 'Civil law', 'Marriage law', 'Intellectual Property', 'Employment Law',
+        'Bankruptcy', 'Tax Law'
+      ];
+      if (!specializations.every(spec => validSpecializations.includes(spec))) {
+        return res.status(400).json({ message: 'Invalid specialization' });
+      }
+      updatedFields.specialization = specializations;
       requiresReverification = true;
     }
-    if (location) updatedFields.location = location;
-    if (yearsOfExperience) updatedFields.yearsOfExperience = parseInt(yearsOfExperience);
-    if (bio) updatedFields.bio = bio.substring(0, 500);
-    if (certifications) updatedFields.certifications = Array.isArray(certifications) ? certifications : [certifications];
-    if (hourlyRate) updatedFields.hourlyRate = parseFloat(hourlyRate);
-    if (languages) updatedFields.languages = Array.isArray(languages) ? languages : [languages];
-    if (typeof isAvailable !== 'undefined') updatedFields.isAvailable = isAvailable === 'true' || isAvailable === true;
+
+    if (location) {
+      updatedFields.location = location;
+    }
+
+    if (yearsOfExperience) {
+      const years = parseInt(yearsOfExperience);
+      if (isNaN(years) || years < 0) {
+        return res.status(400).json({ message: 'Invalid years of experience' });
+      }
+      updatedFields.yearsOfExperience = years;
+    }
+
+    if (bio) {
+      updatedFields.bio = bio.substring(0, 500);
+    }
+
+    if (certifications) {
+      updatedFields.certifications = Array.isArray(certifications) ? certifications : [certifications];
+    }
+
+    if (hourlyRate) {
+      const rate = parseFloat(hourlyRate);
+      if (isNaN(rate) || rate < 0) {
+        return res.status(400).json({ message: 'Invalid hourly rate' });
+      }
+      updatedFields.hourlyRate = rate;
+    }
+
+    if (languages) {
+      updatedFields.languages = Array.isArray(languages) ? languages : [languages];
+    }
+
+    if (typeof isAvailable !== 'undefined') {
+      updatedFields.isAvailable = isAvailable === 'true' || isAvailable === true;
+    }
 
     if (requiresReverification) {
       updatedFields.verificationStatus = 'Pending';
@@ -240,42 +321,126 @@ export const updateProfile = async (req, res) => {
     Object.assign(user, updatedFields);
     await user.save();
 
-    if (requiresReverification) {
-      const notification = new Notification({
-        message: `Lawyer ${user.username} updated specialization to ${updatedFields.specialization.join(', ')}. Please re-verify.`,
-        type: 'lawyer_update',
-        user: null,
-        isAdminNotification: true,
+    await Audit.create({
+      user: userId,
+      action: 'update_profile',
+      target: userId,
+      details: JSON.stringify({ updatedFields })
+    });
+
+    if (email || requiresReverification) {
+      const admins = await User.find({ role: 'Admin' });
+      const transporter = nodemailer.createTransport({
+        service: 'Gmail',
+        auth: {
+          user: process.env.EMAIL_HOST_USER,
+          pass: process.env.EMAIL_HOST_PASSWORD,
+        },
       });
-      await notification.save();
-      io.emit('new_admin_notification', notification.toObject());
+
+      for (const admin of admins) {
+        const message = email
+          ? `Lawyer ${user.username} updated their email to ${email}.`
+          : `Lawyer ${user.username} updated specialization to ${updatedFields.specialization.join(', ')}. Please re-verify.`;
+        const notification = new Notification({
+          user: admin._id,
+          message,
+          type: 'lawyer_profile_update',
+          isAdminNotification: true,
+        });
+        await notification.save();
+        io.to(admin._id.toString()).emit('new_admin_notification', notification.toObject());
+
+        const adminMailOptions = {
+          to: admin.email,
+          from: process.env.EMAIL_HOST_USER,
+          subject: 'Lawyer Profile Update Notification',
+          text: `Dear ${admin.username},\n\n${message}\n\nView details at: ${process.env.FRONTEND_URL}/admin`,
+        };
+        await transporter.sendMail(adminMailOptions);
+        console.log(`✅ Admin notification email sent to ${admin.email}`);
+      }
     }
 
-    res.json({
-      _id: user._id,
-      username: user.username,
-      email: user.email,
-      phone: user.phone,
-      role: user.role,
-      status: user.status,
-      profile_photo: user.profile_photo,
-      specialization: user.specialization,
-      location: user.location,
-      yearsOfExperience: user.yearsOfExperience,
-      bio: user.bio,
-      certifications: user.certifications,
-      hourlyRate: user.hourlyRate,
-      languages: user.languages,
-      isAvailable: user.isAvailable,
-      verificationStatus: user.verificationStatus
-    });
+    const updatedUser = await User.findById(userId).select('-password');
+    res.json({ message: 'Lawyer profile updated successfully', user: updatedUser });
   } catch (error) {
-    console.error('❌ Update Profile Error:', error.message);
+    console.error('❌ Update Lawyer Profile Error:', error.message);
     res.status(500).json({ message: 'Server Error', error: error.message });
   }
 };
 
-export const updateProfileWithUpload = [profileUpload, updateProfile];
+export const updateLawyerProfileWithUpload = [profileUpload, updateLawyerProfile];
+
+export const changeLawyerPassword = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { currentPassword, newPassword } = req.body;
+
+    if (req.user.role !== 'Lawyer') {
+      return res.status(403).json({ message: 'Only Lawyers can change their password' });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: 'Current and new passwords are required' });
+    }
+    if (!(await user.comparePassword(currentPassword))) {
+      return res.status(401).json({ message: 'Current password is incorrect' });
+    }
+    if (newPassword.length < 8) {
+      return res.status(400).json({ message: 'New password must be at least 8 characters' });
+    }
+
+    user.password = newPassword;
+    await user.save();
+
+    await Audit.create({
+      user: userId,
+      action: 'change_password',
+      target: userId,
+      details: JSON.stringify({ message: 'Lawyer changed their password' })
+    });
+
+    const admins = await User.find({ role: 'Admin' });
+    const transporter = nodemailer.createTransport({
+      service: 'Gmail',
+      auth: {
+        user: process.env.EMAIL_HOST_USER,
+        pass: process.env.EMAIL_HOST_PASSWORD,
+      },
+    });
+
+    for (const admin of admins) {
+      const notification = new Notification({
+        user: admin._id,
+        message: `Lawyer ${user.username} changed their password.`,
+        type: 'lawyer_password_change',
+        isAdminNotification: true,
+      });
+      await notification.save();
+      io.to(admin._id.toString()).emit('new_admin_notification', notification.toObject());
+
+      const adminMailOptions = {
+        to: admin.email,
+        from: process.env.EMAIL_HOST_USER,
+        subject: 'Lawyer Password Change Notification',
+        text: `Dear ${admin.username},\n\nLawyer ${user.username} has changed their password.\n\nView details at: ${process.env.FRONTEND_URL}/admin`,
+      };
+      await transporter.sendMail(adminMailOptions);
+      console.log(`✅ Admin notification email sent to ${admin.email}`);
+    }
+
+    res.json({ message: 'Password updated successfully' });
+  } catch (error) {
+    console.error('❌ Change Lawyer Password Error:', error.message);
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
 
 export const updateAdminProfile = async (req, res) => {
   try {
@@ -584,7 +749,6 @@ export const assignReviewer = async (req, res) => {
     user.status = 'Active';
     await user.save();
 
-    // Notify the new LegalReviewer
     const notification = new Notification({
       user: user._id,
       message: 'You have been assigned as a Legal Reviewer.',
@@ -593,7 +757,6 @@ export const assignReviewer = async (req, res) => {
     await notification.save();
     io.to(user._id.toString()).emit('new_notification', notification.toObject());
 
-    // Audit log
     await new Audit({
       user: req.user.id,
       action: 'assign_reviewer',
@@ -601,7 +764,6 @@ export const assignReviewer = async (req, res) => {
       details: `Assigned ${user.username} as Legal Reviewer`,
     }).save();
 
-    // Notify Admins
     const admins = await User.find({ role: 'Admin' });
     const transporter = nodemailer.createTransport({
       service: "Gmail",
@@ -646,25 +808,21 @@ export const assignReviewer = async (req, res) => {
   }
 };
 
-// Add new updateClientProfile function
 export const updateClientProfile = async (req, res) => {
   try {
     const userId = req.user.id;
     const { username, email } = req.body;
     const profilePhoto = req.file;
 
-    // Verify user is a Client
     if (req.user.role !== 'Client') {
       return res.status(403).json({ message: 'Only Clients can update their profile' });
     }
 
-    // Fetch user
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Validate inputs
     if (username) {
       if (username.length < 3 || username.length > 30) {
         return res.status(400).json({ message: 'Username must be between 3 and 30 characters' });
@@ -689,7 +847,6 @@ export const updateClientProfile = async (req, res) => {
     }
 
     if (profilePhoto) {
-      // Delete old profile photo if exists
       if (user.profile_photo) {
         const oldPhotoPath = path.join(__dirname, '../uploads/profiles', user.profile_photo);
         if (fs.existsSync(oldPhotoPath)) {
@@ -699,10 +856,8 @@ export const updateClientProfile = async (req, res) => {
       user.profile_photo = profilePhoto.filename;
     }
 
-    // Save user
     await user.save();
 
-    // Log audit
     await Audit.create({
       user: userId,
       action: 'update_profile',
@@ -716,7 +871,6 @@ export const updateClientProfile = async (req, res) => {
       }),
     });
 
-    // Notify Admins of email change (optional, for significant updates)
     if (email) {
       const admins = await User.find({ role: 'Admin' });
       const transporter = nodemailer.createTransport({
@@ -748,7 +902,6 @@ export const updateClientProfile = async (req, res) => {
       }
     }
 
-    // Return updated user (exclude password)
     const updatedUser = await User.findById(userId).select('-password');
     res.json({ message: 'Client profile updated successfully', user: updatedUser });
   } catch (error) {
@@ -759,24 +912,20 @@ export const updateClientProfile = async (req, res) => {
 
 export const updateClientProfileWithUpload = [profileUpload, updateClientProfile];
 
-// New function: changeClientPassword
 export const changeClientPassword = async (req, res) => {
   try {
     const userId = req.user.id;
     const { currentPassword, newPassword } = req.body;
 
-    // Verify user is a Client
     if (req.user.role !== 'Client') {
       return res.status(403).json({ message: 'Only Clients can change their password' });
     }
 
-    // Fetch user
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Validate inputs
     if (!currentPassword || !newPassword) {
       return res.status(400).json({ message: 'Current and new passwords are required' });
     }
@@ -787,19 +936,16 @@ export const changeClientPassword = async (req, res) => {
       return res.status(400).json({ message: 'New password must be at least 8 characters' });
     }
 
-    // Update password (will be hashed by UserSchema.pre('save'))
     user.password = newPassword;
     await user.save();
 
-    // Log audit
     await Audit.create({
       user: userId,
       action: 'change_password',
       target: userId,
-      details: JSON.stringify({ message: 'Client changed their password' }) ,
+      details: JSON.stringify({ message: 'Client changed their password' }),
     });
 
-    // Notify Admins (for security monitoring)
     const admins = await User.find({ role: 'Admin' });
     const transporter = nodemailer.createTransport({
       service: 'Gmail',

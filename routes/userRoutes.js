@@ -3,7 +3,7 @@ import authMiddleware from '../middlewares/authMiddleware.js';
 import {
   approveLawyer,
   rejectLawyer,
-  updateProfileWithUpload,
+  updateLawyerProfileWithUpload,
   updateAdminProfileWithUpload,
   changeAdminPassword,
   getAllUsers,
@@ -19,17 +19,19 @@ import {
   assignReviewer,
   getPendingReviews,
   updateClientProfileWithUpload,
-  changeClientPassword, 
+  changeClientPassword,
+  changeLawyerPassword 
 } from '../controllers/userController.js';
 
 const router = express.Router();
 
 router.put('/approve-lawyer', authMiddleware(['LegalReviewer']), approveLawyer);
 router.put('/reject-lawyer', authMiddleware(['LegalReviewer']), rejectLawyer);
-router.put('/profile', authMiddleware(['Lawyer']), updateProfileWithUpload);
+router.put('/lawyer/profile', authMiddleware(['Lawyer']), updateLawyerProfileWithUpload);
 router.put('/admin/profile', authMiddleware(['Admin']), updateAdminProfileWithUpload);
 router.put('/client/profile', authMiddleware(['Client']), updateClientProfileWithUpload);
-router.put('/client/password', authMiddleware(['Client']), changeClientPassword); 
+router.put('/client/password', authMiddleware(['Client']), changeClientPassword);
+router.put('/lawyer/password', authMiddleware(['Lawyer']), changeLawyerPassword);
 router.get('/admin/profile', authMiddleware(['Admin']), getAdminProfile);
 router.put('/admin/password', authMiddleware(['Admin']), changeAdminPassword);
 router.get('/', authMiddleware(['Admin']), getAllUsers);
