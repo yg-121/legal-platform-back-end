@@ -14,10 +14,12 @@ import {
   getAdminProfile,
   getLawyers,
   getLawyerProfile,
-  getClientDashboard, 
+  getClientDashboard,
   getLawyerDashboard,
   assignReviewer,
-  getPendingReviews
+  getPendingReviews,
+  updateClientProfileWithUpload,
+  changeClientPassword, 
 } from '../controllers/userController.js';
 
 const router = express.Router();
@@ -26,6 +28,8 @@ router.put('/approve-lawyer', authMiddleware(['LegalReviewer']), approveLawyer);
 router.put('/reject-lawyer', authMiddleware(['LegalReviewer']), rejectLawyer);
 router.put('/profile', authMiddleware(['Lawyer']), updateProfileWithUpload);
 router.put('/admin/profile', authMiddleware(['Admin']), updateAdminProfileWithUpload);
+router.put('/client/profile', authMiddleware(['Client']), updateClientProfileWithUpload);
+router.put('/client/password', authMiddleware(['Client']), changeClientPassword); 
 router.get('/admin/profile', authMiddleware(['Admin']), getAdminProfile);
 router.put('/admin/password', authMiddleware(['Admin']), changeAdminPassword);
 router.get('/', authMiddleware(['Admin']), getAllUsers);
@@ -33,10 +37,10 @@ router.get('/filter', authMiddleware(['Admin']), filterUsers);
 router.get('/pending-lawyers', authMiddleware(['Admin']), getPendingLawyers);
 router.delete('/:userId', authMiddleware(['Admin']), deleteUser);
 router.post('/add-admin', authMiddleware(['Admin']), addAdmin);
-router.post('/assign-reviewer', authMiddleware(['Admin']), assignReviewer); 
+router.post('/assign-reviewer', authMiddleware(['Admin']), assignReviewer);
 router.get('/pending-reviews', authMiddleware(['LegalReviewer']), getPendingReviews);
 router.get('/lawyers', authMiddleware(['Client']), getLawyers);
-router.get('/lawyers/:lawyerId', getLawyerProfile); // New public endpoint
+router.get('/lawyers/:lawyerId', getLawyerProfile);
 router.get('/dashboard/client', authMiddleware(['Client']), getClientDashboard);
 router.get('/dashboard/lawyer', authMiddleware(['Lawyer']), getLawyerDashboard);
 

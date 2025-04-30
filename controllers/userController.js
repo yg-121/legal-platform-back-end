@@ -9,6 +9,12 @@ import Appointment from '../models/Appointment.js';
 import Bid from '../models/Bid.js';
 import Notification from '../models/Notification.js';
 import { io } from '../index.js';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export const getAdminProfile = async (req, res) => {
   try {
@@ -636,6 +642,196 @@ export const assignReviewer = async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Assign Reviewer Error:', error.message);
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
+// Add new updateClientProfile function
+export const updateClientProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { username, email } = req.body;
+    const profilePhoto = req.file;
+
+    // Verify user is a Client
+    if (req.user.role !== 'Client') {
+      return res.status(403).json({ message: 'Only Clients can update their profile' });
+    }
+
+    // Fetch user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Validate inputs
+    if (username) {
+      if (username.length < 3 || username.length > 30) {
+        return res.status(400).json({ message: 'Username must be between 3 and 30 characters' });
+      }
+      const existingUsername = await User.findOne({ username, _id: { $ne: userId } });
+      if (existingUsername) {
+        return res.status(409).json({ message: 'Username already taken' });
+      }
+      user.username = username;
+    }
+
+    if (email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({ message: 'Invalid email format' });
+      }
+      const existingEmail = await User.findOne({ email, _id: { $ne: userId } });
+      if (existingEmail) {
+        return res.status(409).json({ message: 'Email already in use' });
+      }
+      user.email = email;
+    }
+
+    if (profilePhoto) {
+      // Delete old profile photo if exists
+      if (user.profile_photo) {
+        const oldPhotoPath = path.join(__dirname, '../uploads/profiles', user.profile_photo);
+        if (fs.existsSync(oldPhotoPath)) {
+          fs.unlinkSync(oldPhotoPath);
+        }
+      }
+      user.profile_photo = profilePhoto.filename;
+    }
+
+    // Save user
+    await user.save();
+
+    // Log audit
+    await Audit.create({
+      user: userId,
+      action: 'update_profile',
+      target: userId,
+      details: JSON.stringify({
+        updatedFields: {
+          username: username || undefined,
+          email: email || undefined,
+          profile_photo: profilePhoto ? profilePhoto.filename : undefined,
+        },
+      }),
+    });
+
+    // Notify Admins of email change (optional, for significant updates)
+    if (email) {
+      const admins = await User.find({ role: 'Admin' });
+      const transporter = nodemailer.createTransport({
+        service: 'Gmail',
+        auth: {
+          user: process.env.EMAIL_HOST_USER,
+          pass: process.env.EMAIL_HOST_PASSWORD,
+        },
+      });
+
+      for (const admin of admins) {
+        const notification = new Notification({
+          user: admin._id,
+          message: `Client ${user.username} updated their email to ${email}.`,
+          type: 'client_profile_update',
+          isAdminNotification: true,
+        });
+        await notification.save();
+        io.to(admin._id.toString()).emit('new_admin_notification', notification.toObject());
+
+        const adminMailOptions = {
+          to: admin.email,
+          from: process.env.EMAIL_HOST_USER,
+          subject: 'Client Profile Update Notification',
+          text: `Dear ${admin.username},\n\nClient ${user.username} has updated their email to ${email}.\n\nView details at: ${process.env.FRONTEND_URL}/admin`,
+        };
+        await transporter.sendMail(adminMailOptions);
+        console.log(`✅ Admin notification email sent to ${admin.email}`);
+      }
+    }
+
+    // Return updated user (exclude password)
+    const updatedUser = await User.findById(userId).select('-password');
+    res.json({ message: 'Client profile updated successfully', user: updatedUser });
+  } catch (error) {
+    console.error('❌ Update Client Profile Error:', error.message);
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
+export const updateClientProfileWithUpload = [profileUpload, updateClientProfile];
+
+// New function: changeClientPassword
+export const changeClientPassword = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { currentPassword, newPassword } = req.body;
+
+    // Verify user is a Client
+    if (req.user.role !== 'Client') {
+      return res.status(403).json({ message: 'Only Clients can change their password' });
+    }
+
+    // Fetch user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Validate inputs
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: 'Current and new passwords are required' });
+    }
+    if (!(await user.comparePassword(currentPassword))) {
+      return res.status(401).json({ message: 'Current password is incorrect' });
+    }
+    if (newPassword.length < 8) {
+      return res.status(400).json({ message: 'New password must be at least 8 characters' });
+    }
+
+    // Update password (will be hashed by UserSchema.pre('save'))
+    user.password = newPassword;
+    await user.save();
+
+    // Log audit
+    await Audit.create({
+      user: userId,
+      action: 'change_password',
+      target: userId,
+      details: JSON.stringify({ message: 'Client changed their password' }) ,
+    });
+
+    // Notify Admins (for security monitoring)
+    const admins = await User.find({ role: 'Admin' });
+    const transporter = nodemailer.createTransport({
+      service: 'Gmail',
+      auth: {
+        user: process.env.EMAIL_HOST_USER,
+        pass: process.env.EMAIL_HOST_PASSWORD,
+      },
+    });
+
+    for (const admin of admins) {
+      const notification = new Notification({
+        user: admin._id,
+        message: `Client ${user.username} changed their password.`,
+        type: 'client_password_change',
+        isAdminNotification: true,
+      });
+      await notification.save();
+      io.to(admin._id.toString()).emit('new_admin_notification', notification.toObject());
+
+      const adminMailOptions = {
+        to: admin.email,
+        from: process.env.EMAIL_HOST_USER,
+        subject: 'Client Password Change Notification',
+        text: `Dear ${admin.username},\n\nClient ${user.username} has changed their password.\n\nView details at: ${process.env.FRONTEND_URL}/admin`,
+      };
+      await transporter.sendMail(adminMailOptions);
+      console.log(`✅ Admin notification email sent to ${admin.email}`);
+    }
+
+    res.json({ message: 'Password updated successfully' });
+  } catch (error) {
+    console.error('❌ Change Client Password Error:', error.message);
     res.status(500).json({ message: 'Server Error', error: error.message });
   }
 };
