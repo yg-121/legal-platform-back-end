@@ -820,10 +820,11 @@ export const getCaseDetails = async (req, res) => {
     const isClient = caseData.client._id.toString() === userId;
     const isLawyer = caseData.assigned_lawyer && caseData.assigned_lawyer._id.toString() === userId;
     const isAdmin = req.user.role === 'Admin';
+    const isPostedCase = req.user.role === 'Lawyer' && caseData.status === 'Posted';
 
     console.log(`Auth check: isClient=${isClient}, isLawyer=${isLawyer}, isAdmin=${isAdmin}`);
 
-    if (!isClient && !isLawyer && !isAdmin) {
+    if (!isClient && !isLawyer && !isAdmin && !isPostedCase) {
       console.log(`Unauthorized: user ${userId} not client, lawyer, or Admin`);
       return res.status(403).json({ message: 'Unauthorized' });
     }
