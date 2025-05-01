@@ -710,7 +710,7 @@ export const addAdmin = async (req, res) => {
     await newAdmin.save();
 
     await new Audit({
-      admin: req.user.id,
+      user: req.user.id,
       action: 'add_admin',
       target: newAdmin._id,
     }).save();
@@ -939,7 +939,7 @@ export const assignReviewer = async (req, res) => {
 export const updateClientProfile = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { username, email } = req.body;
+    const { username, email, phone } = req.body; // Added phone
     const profilePhoto = req.file;
 
     if (req.user.role !== 'Client') {
@@ -976,14 +976,28 @@ export const updateClientProfile = async (req, res) => {
       updatedFields.email = email;
     }
 
+    if (phone) {
+      // Optional: Add phone validation (e.g., regex for format)
+      const phoneRegex = /^\+?[\d\s-]{7,15}$/;
+      if (!phoneRegex.test(phone)) {
+        return res.status(400).json({ message: 'Invalid phone number format' });
+      }
+      updatedFields.phone = phone;
+    }
+
+    // Debug: Log profile photo
+    console.log('Profile photo file:', profilePhoto);
+
     if (profilePhoto) {
       if (user.profile_photo) {
-        const oldPhotoPath = path.join(__dirname, '../Uploads/profiles', user.profile_photo);
+        const oldPhotoPath = path.join(__dirname, '../uploads', path.basename(user.profile_photo)); // Use Uploads/
         if (fs.existsSync(oldPhotoPath)) {
           fs.unlinkSync(oldPhotoPath);
+          console.log(`Deleted old profile photo: ${oldPhotoPath}`);
         }
       }
-      updatedFields.profile_photo = profilePhoto.filename;
+      updatedFields.profile_photo = `uploads/${profilePhoto.filename}`; // Correct to uploads/
+      console.log('New profile photo path:', updatedFields.profile_photo);
     }
 
     console.log('updatedFields:', updatedFields);
@@ -993,7 +1007,7 @@ export const updateClientProfile = async (req, res) => {
       { $set: updatedFields }
     );
 
-    const updatedUser = await User.findById(userId).select('-password');
+    const updatedUser = await User.findById(userId).select('_id username email role profile_photo status phone createdAt updatedAt');
 
     await Audit.create({
       user: userId,
@@ -1113,7 +1127,7 @@ export const changeClientPassword = async (req, res) => {
 };
 export const getClientProfile = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select('-password');
+    const user = await User.findById(req.user.id).select('_id username email role profile_photo status phone createdAt updatedAt');
     if (!user) {
       return res.status(404).json({ message: 'Client not found' });
     }
@@ -1122,15 +1136,7 @@ export const getClientProfile = async (req, res) => {
     }
     res.json({
       message: 'Client profile fetched successfully',
-      user: {
-        _id: user._id,
-        username: user.username,
-        email: user.email,
-        role: user.role,
-        profile_photo: user.profile_photo,
-        status: user.status,
-        phone: user.phone
-      }
+      user
     });
   } catch (error) {
     console.error('❌ Get Client Profile Error:', error.message);
