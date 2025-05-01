@@ -92,3 +92,14 @@ export const acceptBid = async (req, res) => {
         res.status(500).json({ message: "Server Error", error: error.message });
     }
 };
+export const getMyBids = async (req, res) => {
+    try {
+      const bids = await Bid.find({ lawyer: req.user.id })
+        .populate('case', 'description category status')
+        .populate('lawyer', 'username email');
+      res.json({ message: 'My bids fetched', bids });
+    } catch (error) {
+      console.error('❌ Fetch My Bids Error:', error.message);
+      res.status(500).json({ message: 'Server Error', error: error.message });
+    }
+  };

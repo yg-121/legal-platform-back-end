@@ -1111,3 +1111,29 @@ export const changeClientPassword = async (req, res) => {
     res.status(500).json({ message: 'Server Error', error: error.message });
   }
 };
+export const getClientProfile = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('-password');
+    if (!user) {
+      return res.status(404).json({ message: 'Client not found' });
+    }
+    if (user.role !== 'Client') {
+      return res.status(403).json({ message: 'Client access required' });
+    }
+    res.json({
+      message: 'Client profile fetched successfully',
+      user: {
+        _id: user._id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        profile_photo: user.profile_photo,
+        status: user.status,
+        phone: user.phone
+      }
+    });
+  } catch (error) {
+    console.error('❌ Get Client Profile Error:', error.message);
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};

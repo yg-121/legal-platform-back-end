@@ -14,6 +14,7 @@ import {
   getAdminProfile,
   getLawyers,
   getLawyerProfile,
+  getClientProfile,
   getClientDashboard,
   getLawyerDashboard,
   assignReviewer,
@@ -30,6 +31,7 @@ router.put('/reject-lawyer', authMiddleware(['LegalReviewer']), rejectLawyer);
 router.put('/lawyer/profile', authMiddleware(['Lawyer']), updateLawyerProfileWithUpload);
 router.put('/admin/profile', authMiddleware(['Admin']), updateAdminProfileWithUpload);
 router.put('/client/profile', authMiddleware(['Client']), updateClientProfileWithUpload);
+router.get('/client/profile', authMiddleware(['Client']), getClientProfile);
 router.put('/client/password', authMiddleware(['Client']), changeClientPassword);
 router.put('/lawyer/password', authMiddleware(['Lawyer']), changeLawyerPassword);
 router.get('/admin/profile', authMiddleware(['Admin']), getAdminProfile);
