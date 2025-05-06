@@ -7,16 +7,24 @@ import {
   cancelAppointment,
   changeAppointmentDate,
   completeAppointment,
-  generateICS, // New import
+  generateICS,
 } from '../controllers/appointmentController.js';
 
 const router = express.Router();
 
+// Add console log to debug route registration
+console.log("Registering appointment routes");
+
 // Create an appointment (Client or Lawyer)
 router.post('/', authMiddleware(['Client', 'Lawyer']), createAppointment);
 
-// Get appointments (calendar view)
-router.get('/', authMiddleware(['Client', 'Lawyer', 'Admin']), getAppointments);
+// Get appointments (calendar view) - Allow Admin access
+console.log("Registering GET / route for appointments");
+router.get('/', authMiddleware(['Client', 'Lawyer', 'Admin']), (req, res) => {
+  console.log("GET /appointments route hit by user:", req.user?.id, "with role:", req.user?.role);
+  console.log("Query params:", req.query);
+  getAppointments(req, res);
+});
 
 // Confirm appointment (Lawyer only)
 router.patch('/:id/confirm', authMiddleware(['Lawyer']), confirmAppointment);
@@ -32,5 +40,11 @@ router.patch('/:id/complete', authMiddleware(['Lawyer']), completeAppointment);
 
 // Generate ICS file (Client or Lawyer)
 router.get('/:id/ics', authMiddleware(['Client', 'Lawyer']), generateICS);
+
+// Add a test route to check if the appointments endpoint is working
+router.get('/test', (req, res) => {
+  console.log("Test route hit");
+  res.json({ message: "Appointments test route working" });
+});
 
 export default router;

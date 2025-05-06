@@ -16,7 +16,12 @@ const auditSchema = new mongoose.Schema({
       'change_password',
       'delete_user',
       'add_admin',
-      'assign_reviewer'
+      'assign_reviewer',
+      'login',
+      'logout',
+      'create',
+      'update',
+      'delete'
     ]
   },
   target: {
@@ -33,7 +38,7 @@ const auditSchema = new mongoose.Schema({
     default: Date.now
   }
 }, {
-  // Allow population of fields not explicitly defined (e.g., admin)
+  // Allow population of fields not explicitly defined
   strictPopulate: false
 });
 
