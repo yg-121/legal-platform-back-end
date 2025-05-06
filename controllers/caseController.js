@@ -801,8 +801,8 @@ export const getCaseDetails = async (req, res) => {
     console.log(`Fetching case ${caseId} for user ${userId}, role: ${req.user.role}`);
 
     const caseData = await Case.findById(caseId)
-      .populate('client', 'username email')
-      .populate('assigned_lawyer', 'username email')
+      .populate('client', '_id username email')
+      .populate('assigned_lawyer', '_id username email')
       .populate('winning_bid', 'amount lawyer')
       .populate('documents.uploadedBy', 'username')
       .populate('formTemplates.createdBy', 'username')
