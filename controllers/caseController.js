@@ -843,11 +843,75 @@ export const getCaseDetails = async (req, res) => {
           (note.visibility === 'Client' && caseData.client._id.toString() === userId) ||
           (note.visibility === 'Lawyer' && caseData.assigned_lawyer?._id.toString() === userId)
       ),
+        
     };
 
     res.json({ message: 'Case details fetched', case: filteredCase });
   } catch (error) {
     console.error('❌ Fetch Case Details Error:', error.message);
     res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
+// Upload case documents
+export const uploadCaseDocuments = async (req, res) => {
+  try {
+    const { caseId } = req.params;
+    const { visibility, category } = req.body;
+    const files = req.files;
+    const userId = req.user.id;
+
+    if (!files || files.length === 0) {
+      return res.status(400).json({ message: 'No files uploaded' });
+    }
+
+    const caseData = await Case.findById(caseId);
+    if (!caseData) return res.status(404).json({ message: 'Case not found' });
+    
+    // Check authorization
+    if (
+      caseData.client.toString() !== userId &&
+      caseData.assigned_lawyer?.toString() !== userId &&
+      req.user.role !== 'Admin'
+    ) {
+      return res.status(403).json({ message: 'Unauthorized' });
+    }
+
+    // Process uploaded files
+    const newDocuments = files.map((file) => ({
+      filePath: file.path,
+      fileName: file.originalname,
+      category: category || 'Evidence',
+      visibility: visibility || 'Both',
+      uploadedBy: userId,
+    }));
+
+    // Add new documents to the case
+    caseData.documents = [...caseData.documents, ...newDocuments];
+    await caseData.save();
+
+    // Send notification to the other party
+    const otherPartyId = caseData.client.toString() === userId 
+      ? caseData.assigned_lawyer 
+      : caseData.client;
+    
+    if (otherPartyId) {
+      await sendNotification(
+        otherPartyId,
+        `New document${files.length > 1 ? 's' : ''} uploaded to case: ${caseData.description}`,
+        'document_uploaded'
+      );
+    }
+
+    // Emit socket event
+    io.emit('document_uploaded', { caseId, documents: newDocuments });
+
+    res.status(200).json({
+      message: `${files.length} document${files.length > 1 ? 's' : ''} uploaded successfully`,
+      documents: caseData.documents,
+    });
+  } catch (error) {
+    console.error('❌ Upload Documents Error:', error.message);
+    res.status(500).json({ message: 'Failed to upload documents', error: error.message });
   }
 };

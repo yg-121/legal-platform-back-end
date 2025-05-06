@@ -19,6 +19,7 @@ import {
   addNote,
   getCaseAnalytics,
   getCaseDetails,
+  uploadCaseDocuments,      //add by me
 } from '../controllers/caseController.js';
 import { createBid, getCaseBids } from '../controllers/bidController.js';
 
@@ -42,7 +43,8 @@ router.post('/:caseId/forms', authMiddleware(['Client', 'Lawyer', 'Admin']), cre
 router.patch('/:caseId/forms/:formId/sign', authMiddleware(['Client', 'Lawyer', 'Admin']), signForm);
 router.post('/:caseId/notes', authMiddleware(['Client', 'Lawyer', 'Admin']), addNote);
 router.get('/:caseId/documents', authMiddleware(['Client', 'Lawyer', 'Admin']), getCaseDocuments);
-router.delete('/:caseId/documents/:documentId', authMiddleware(['Client', 'Lawyer', 'Admin']), deleteCaseDocument);
+router.post('/:caseId/documents', authMiddleware(['Client', 'Lawyer']), caseUpload, uploadCaseDocuments);
+router.delete('/:caseId/documents/:documentId', authMiddleware(['Client', 'Lawyer']), deleteCaseDocument);
 
 // Lawyer/Admin routes
 router.get('/', authMiddleware(['Lawyer', 'Admin']), getAllCases);

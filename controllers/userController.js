@@ -221,6 +221,9 @@ export const updateLawyerProfile = async (req, res) => {
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
+    
+    console.log('user before update:', user);
+    
     if (user.status !== 'Active') {
       return res.status(403).json({ message: 'Account must be Active to update profile' });
     }

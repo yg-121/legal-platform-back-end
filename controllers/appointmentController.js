@@ -153,7 +153,7 @@ export const confirmAppointment = async (req, res) => {
     if (appointment.status !== 'Pending') {
       return res.status(400).json({ message: 'Appointment cannot be confirmed' });
     }
-
+    
     appointment.status = 'Confirmed';
     await appointment.save();
 
@@ -172,39 +172,39 @@ export const confirmAppointment = async (req, res) => {
 };
 
 // Cancel appointment
-export const cancelAppointment = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const userId = req.user.id;
+  export const cancelAppointment = async (req, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
 
-    const appointment = await Appointment.findById(id);
-    if (!appointment) {
-      return res.status(404).json({ message: 'Appointment not found' });
+      const appointment = await Appointment.findById(id);
+      if (!appointment) {
+        return res.status(404).json({ message: 'Appointment not found' });
+      }
+      if (appointment.client.toString() !== userId && appointment.lawyer.toString() !== userId) {
+        return res.status(403).json({ message: 'Only the client or lawyer can cancel' });
+      }
+      if (appointment.status === 'Cancelled') {
+        return res.status(400).json({ message: 'Appointment already cancelled' });
+      }
+
+      appointment.status = 'Cancelled';
+      await appointment.save();
+
+      const targetId = appointment.client.toString() === userId ? appointment.lawyer : appointment.client;
+      const caseData = await Case.findById(appointment.case);
+      await sendNotification(
+        targetId,
+        `${appointment.type} on ${appointment.date.toLocaleString()}${caseData ? ` for case "${caseData.description}"` : ''} was cancelled by ${req.user.username || 'user'}`,
+        'Appointment'
+      );
+
+      res.json({ message: 'Appointment cancelled', appointment });
+    } catch (error) {
+      console.error('❌ Cancel Appointment Error:', error.message);
+      res.status(500).json({ message: 'Failed to cancel appointment', error: error.message });
     }
-    if (appointment.client.toString() !== userId && appointment.lawyer.toString() !== userId) {
-      return res.status(403).json({ message: 'Only the client or lawyer can cancel' });
-    }
-    if (appointment.status === 'Cancelled') {
-      return res.status(400).json({ message: 'Appointment already cancelled' });
-    }
-
-    appointment.status = 'Cancelled';
-    await appointment.save();
-
-    const targetId = appointment.client.toString() === userId ? appointment.lawyer : appointment.client;
-    const caseData = await Case.findById(appointment.case);
-    await sendNotification(
-      targetId,
-      `${appointment.type} on ${appointment.date.toLocaleString()}${caseData ? ` for case "${caseData.description}"` : ''} was cancelled by ${req.user.username || 'user'}`,
-      'Appointment'
-    );
-
-    res.json({ message: 'Appointment cancelled', appointment });
-  } catch (error) {
-    console.error('❌ Cancel Appointment Error:', error.message);
-    res.status(500).json({ message: 'Failed to cancel appointment', error: error.message });
-  }
-};
+  };
 
 // Change appointment date
 export const changeAppointmentDate = async (req, res) => {
@@ -466,5 +466,27 @@ export const generateICS = async (req, res) => {
   } catch (error) {
     console.error('❌ Generate ICS Error:', error.message);
     res.status(500).json({ message: 'Failed to generate calendar file', error: error.message });
+  }
+};
+
+export const getCasesAppointments = async (req, res) => {
+  try {
+    const userId = req.user._id; // assuming authentication middleware attaches this
+    const caseId = req.params.caseId || req.query.caseId;
+
+    if (!caseId) {
+      return res.status(400).json({ message: "Case ID is required." });
+    }
+
+    // Find appointments where the user is either the client or lawyer AND matches the caseId
+    const appointments = await Appointment.find({
+      case: caseId,
+      // $or: [{ client: userId }, { lawyer: userId }],
+    }).populate("client lawyer case");
+      console.log("apppointments fetched", appointments, caseId);
+    return res.status(200).json({ appointments });
+  } catch (error) {
+    console.error("Error fetching case appointments:", error);
+    return res.status(500).json({ message: "Server error" });
   }
 };

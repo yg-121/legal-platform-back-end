@@ -7,6 +7,7 @@ import {
   cancelAppointment,
   changeAppointmentDate,
   completeAppointment,
+  getCasesAppointments,
   generateICS, // New import
 } from '../controllers/appointmentController.js';
 
@@ -32,5 +33,8 @@ router.patch('/:id/complete', authMiddleware(['Lawyer']), completeAppointment);
 
 // Generate ICS file (Client or Lawyer)
 router.get('/:id/ics', authMiddleware(['Client', 'Lawyer']), generateICS);
+
+router.get("/case/:caseId",authMiddleware(["Client", "Lawyer"]), getCasesAppointments);
+
 
 export default router;

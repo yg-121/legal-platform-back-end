@@ -81,10 +81,36 @@ export const acceptBid = async (req, res) => {
         caseData.assigned_lawyer = bid.lawyer;
         await caseData.save();
 
+        // Update all other bids for this case to 'Rejected'
+        await Bid.updateMany(
+            { 
+                case: caseData._id, 
+                _id: { $ne: bidId } // Not equal to the accepted bid
+            },
+            { 
+                status: 'Rejected' 
+            }
+        );
+
         // Notify the lawyer
         const lawyerId = bid.lawyer;
         const notificationMessage = `Your bid of ${bid.amount} ETB on case "${caseData.description}" has been accepted!`;
         await sendNotification(lawyerId, notificationMessage, 'BidAccepted');
+
+        // Notify other lawyers that their bids were rejected
+        const rejectedBids = await Bid.find({ 
+            case: caseData._id, 
+            _id: { $ne: bidId },
+            lawyer: { $ne: lawyerId } // Don't notify the winning lawyer
+        });
+        
+        for (const rejectedBid of rejectedBids) {
+            await sendNotification(
+                rejectedBid.lawyer,
+                `Your bid of ${rejectedBid.amount} ETB on case "${caseData.description}" was not selected.`,
+                'BidRejected'
+            );
+        }
 
         res.json({ message: "Bid accepted", bid, case: caseData });
     } catch (error) {
