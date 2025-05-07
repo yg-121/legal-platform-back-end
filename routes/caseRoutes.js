@@ -19,7 +19,7 @@ import {
   addNote,
   getCaseAnalytics,
   getCaseDetails,
-  uploadCaseDocuments,      //add by me
+  uploadCaseDocuments,      
 } from '../controllers/caseController.js';
 import { createBid, getCaseBids } from '../controllers/bidController.js';
 

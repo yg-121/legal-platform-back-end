@@ -12,6 +12,7 @@ import { io } from '../index.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import bcrypt from 'bcryptjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -524,36 +525,8 @@ export const updateAdminProfile = async (req, res) => {
       details: JSON.stringify({ updatedFields })
     });
 
-    if (email) {
-      const admins = await User.find({ role: 'Admin', _id: { $ne: userId } });
-      const transporter = nodemailer.createTransport({
-        service: 'Gmail',
-        auth: {
-          user: process.env.EMAIL_HOST_USER,
-          pass: process.env.EMAIL_HOST_PASSWORD,
-        },
-      });
-
-      for (const admin of admins) {
-        const notification = new Notification({
-          user: admin._id,
-          message: `Admin ${updatedUser.username} updated their email to ${email}.`,
-          type: 'admin_profile_update',
-          isAdminNotification: true,
-        });
-        await notification.save();
-        io.to(admin._id.toString()).emit('new_admin_notification', notification.toObject());
-
-        const adminMailOptions = {
-          to: admin.email,
-          from: process.env.EMAIL_HOST_USER,
-          subject: 'Admin Profile Update Notification',
-          text: `Dear ${admin.username},\n\nAdmin ${updatedUser.username} has updated their email to ${email}.\n\nView details at: ${process.env.FRONTEND_URL}/admin`,
-        };
-        await transporter.sendMail(adminMailOptions);
-        console.log(`✅ Admin notification email sent to ${admin.email}`);
-      }
-    }
+    // TEMPORARILY DISABLE NOTIFICATIONS
+    console.log('Admin profile notifications temporarily disabled');
 
     res.json({
       message: 'Admin profile updated successfully',
@@ -572,65 +545,39 @@ export const changeAdminPassword = async (req, res) => {
     const userId = req.user.id;
     const { currentPassword, newPassword } = req.body;
 
-    if (req.user.role !== 'Admin') {
-      return res.status(403).json({ message: 'Admin access required' });
-    }
-
+    // Find the admin user
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    if (!currentPassword || !newPassword) {
-      return res.status(400).json({ message: 'Current and new passwords are required' });
-    }
-    if (!(await user.comparePassword(currentPassword))) {
-      return res.status(401).json({ message: 'Current password is incorrect' });
-    }
-    if (newPassword.length < 8) {
-      return res.status(400).json({ message: 'New password must be at least 8 characters' });
+    // Verify current password
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ message: 'Current password is incorrect' });
     }
 
-    user.password = newPassword;
+    // Hash new password
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(newPassword, salt);
+
+    // Save updated user
     await user.save();
 
-    await Audit.create({
+    // Create audit log
+    const audit = new Audit({
       user: userId,
       action: 'change_password',
       target: userId,
-      details: JSON.stringify({ message: 'Admin changed their password' })
+      details: 'Admin changed their password'
     });
+    await audit.save();
 
-    const admins = await User.find({ role: 'Admin', _id: { $ne: userId } });
-    const transporter = nodemailer.createTransport({
-      service: 'Gmail',
-      auth: {
-        user: process.env.EMAIL_HOST_USER,
-        pass: process.env.EMAIL_HOST_PASSWORD,
-      },
-    });
+    // TEMPORARILY DISABLE ALL NOTIFICATIONS FOR ADMIN PASSWORD CHANGES
+    // We'll rebuild this feature after fixing the duplicate notification issue
+    console.log('Admin password change notifications temporarily disabled to fix duplicate notification issue');
 
-    for (const admin of admins) {
-      const notification = new Notification({
-        user: admin._id,
-        message: `Admin ${user.username} changed their password.`,
-        type: 'admin_password_change',
-        isAdminNotification: true,
-      });
-      await notification.save();
-      io.to(admin._id.toString()).emit('new_admin_notification', notification.toObject());
-
-      const adminMailOptions = {
-        to: admin.email,
-        from: process.env.EMAIL_HOST_USER,
-        subject: 'Admin Password Change Notification',
-        text: `Dear ${admin.username},\n\nAdmin ${user.username} has changed their password.\n\nView details at: ${process.env.FRONTEND_URL}/admin`,
-      };
-      await transporter.sendMail(adminMailOptions);
-      console.log(`✅ Admin notification email sent to ${admin.email}`);
-    }
-
-    res.json({ message: 'Password updated successfully' });
+    res.json({ message: 'Password changed successfully' });
   } catch (error) {
     console.error('❌ Change Admin Password Error:', error.message);
     res.status(500).json({ message: 'Server Error', error: error.message });
