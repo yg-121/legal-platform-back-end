@@ -26,32 +26,32 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: ["http://localhost:5173", "http://127.0.0.1:5173", "*"],
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    origin: ['http://localhost:5173', 'http://127.0.0.1:5173', '*'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     credentials: true,
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ['Content-Type', 'Authorization']
   },
   // Add path if you're using a specific path
-  path: "/socket.io/",
+  path: '/socket.io/',
   // Add transport options
-  transports: ["polling", "websocket"],
+  transports: ['polling', 'websocket']
 });
 
 // Add more detailed logging for socket connections
-io.on("connection", (socket) => {
-  console.log("Client connected:", socket.id);
-
+io.on('connection', (socket) => {
+  console.log('Client connected:', socket.id);
+  
   // Log authentication information
-  console.log("Auth data:", socket.handshake.auth);
-
+  console.log('Auth data:', socket.handshake.auth);
+  
   // Handle user joining a room
   if (socket.handshake.auth.userId) {
     const userId = socket.handshake.auth.userId;
     socket.join(userId);
     console.log(`User ${userId} joined their room`);
   }
-
-  socket.on("disconnect", () => console.log("Client disconnected:", socket.id));
+  
+  socket.on('disconnect', () => console.log('Client disconnected:', socket.id));
 });
 
 const __filename = fileURLToPath(import.meta.url);

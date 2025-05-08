@@ -99,7 +99,19 @@ export const sendNotification = async (userId, message, type) => {
       const admins = await User.find({ role: 'Admin' });
       console.log(`[DEBUG] Found ${admins.length} Admins: ${admins.map(a => `${a.username} (${a.email})`).join(', ')}`);
 
+      // Track which admins we've already notified to prevent duplicates
+      const notifiedAdmins = new Set();
+
       for (const admin of admins) {
+        // Skip if we've already notified this admin
+        if (notifiedAdmins.has(admin._id.toString())) {
+          console.log(`[DEBUG] Skipping duplicate notification for admin ${admin.username}`);
+          continue;
+        }
+        
+        // Add to notified set
+        notifiedAdmins.add(admin._id.toString());
+        
         console.log(`[DEBUG] Creating notification for Admin: ${admin.username} (${admin.email})`);
         const adminNotification = new Notification({
           user: admin._id,

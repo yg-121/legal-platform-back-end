@@ -39,7 +39,7 @@ router.get('/admin/profile', authMiddleware(['Admin']), getAdminProfile);
 router.put('/admin/password', authMiddleware(['Admin']), changeAdminPassword);
 router.get('/', authMiddleware(['Admin']), getAllUsers);
 router.get('/filter', authMiddleware(['Admin']), filterUsers);
-router.get('/pending-lawyers', authMiddleware(['Admin']), getPendingLawyers);
+router.get('/pending-lawyers', authMiddleware(['Admin', 'LegalReviewer']), getPendingLawyers);
 router.delete('/:userId', authMiddleware(['Admin']), deleteUser);
 router.post('/add-admin', authMiddleware(['Admin']), addAdmin);
 router.post('/assign-reviewer', authMiddleware(['Admin']), assignReviewer);
