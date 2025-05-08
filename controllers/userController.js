@@ -942,7 +942,7 @@ export const assignReviewer = async (req, res) => {
 export const updateClientProfile = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { username, email, phone } = req.body; // Added phone
+    const { username, email, phone, firstName, lastName, location } = req.body; // Added firstName, lastName
     const profilePhoto = req.file;
 
     if (req.user.role !== 'Client') {
@@ -954,39 +954,28 @@ export const updateClientProfile = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    const updatedFields = {};
-
-    if (username) {
-      if (username.length < 3 || username.length > 30) {
-        return res.status(400).json({ message: 'Username must be between 3 and 30 characters' });
-      }
-      const existingUsername = await User.findOne({ username, _id: { $ne: userId } });
-      if (existingUsername) {
-        return res.status(409).json({ message: 'Username already taken' });
-      }
-      updatedFields.username = username;
-    }
-
-    if (email) {
+    // Validate email format
+    if (email && email !== user.email) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email)) {
         return res.status(400).json({ message: 'Invalid email format' });
       }
-      const existingEmail = await User.findOne({ email, _id: { $ne: userId } });
-      if (existingEmail) {
-        return res.status(409).json({ message: 'Email already in use' });
+      
+      // Check if email is already in use
+      const existingUser = await User.findOne({ email, _id: { $ne: userId } });
+      if (existingUser) {
+        return res.status(400).json({ message: 'Email is already in use' });
       }
-      updatedFields.email = email;
     }
 
-    if (phone) {
-      // Optional: Add phone validation (e.g., regex for format)
-      const phoneRegex = /^\+?[\d\s-]{7,15}$/;
-      if (!phoneRegex.test(phone)) {
-        return res.status(400).json({ message: 'Invalid phone number format' });
-      }
-      updatedFields.phone = phone;
-    }
+    const updatedFields = {};
+    
+    if (username && username !== user.username) updatedFields.username = username;
+    if (email && email !== user.email) updatedFields.email = email;
+    if (phone && phone !== user.phone) updatedFields.phone = phone;
+    if (firstName && firstName !== user.firstName) updatedFields.firstName = firstName;
+    if (lastName && lastName !== user.lastName) updatedFields.lastName = lastName;
+    if (location && location !== user.location) updatedFields.location = location;
 
     // Debug: Log profile photo
     console.log('Profile photo file:', profilePhoto);
@@ -1140,6 +1129,25 @@ export const getClientProfile = async (req, res) => {
     res.json({
       message: 'Client profile fetched successfully',
       user
+    });
+  } catch (error) {
+    console.error('❌ Get Client Profile Error:', error.message);
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
+export const getClientProfileMe = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('_id username email role profile_photo status phone location createdAt updatedAt');
+    if (!user) {
+      return res.status(404).json({ message: 'Client not found' });
+    }
+    if (user.role !== 'Client') {
+      return res.status(403).json({ message: 'Client access required' });
+    }
+    res.json({
+      message: 'Client profile fetched successfully',
+      client: user
     });
   } catch (error) {
     console.error('❌ Get Client Profile Error:', error.message);

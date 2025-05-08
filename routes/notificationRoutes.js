@@ -10,10 +10,14 @@ import {
 
 const router = express.Router();
 
-// Existing: User notifications
+// Get user notifications
 router.get('/notifications', authMiddleware(), async (req, res) => {
   try {
-    const notifications = await Notification.find({ user: req.user.id, isAdminNotification: false }).sort({ createdAt: -1 });
+    const notifications = await Notification.find({ 
+      user: req.user.id, 
+      isAdminNotification: false 
+    }).sort({ createdAt: -1 });
+    
     res.json(notifications);
   } catch (error) {
     console.error('❌ Fetch Notifications Error:', error.message);
@@ -21,18 +25,38 @@ router.get('/notifications', authMiddleware(), async (req, res) => {
   }
 });
 
-// New: Admin notifications with counts
-router.get('/admin/notifications', authMiddleware(['Admin']), getNotifications);
-router.get('/admin/stats', authMiddleware(['Admin']), getAdminStats);
-router.patch('/notifications/:notificationId/read', authMiddleware(['Admin']), markNotificationAsRead);
+// Mark notification as read
+router.patch('/notifications/:notificationId/read', authMiddleware(), markNotificationAsRead);
 
-// Add console log to debug route registration
-console.log("Registering route: /mark-all-read");
+// Get unread notification count
+router.get('/unread-count', authMiddleware(), async (req, res) => {
+  try {
+    const count = await Notification.countDocuments({ 
+      user: req.user.id, 
+      status: { $ne: "Read" },
+      isAdminNotification: req.user.role === 'Admin'
+    });
+    
+    res.json({ count });
+  } catch (error) {
+    console.error('❌ Fetch Unread Count Error:', error.message);
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+});
 
-// Add new route for marking all notifications as read
-router.patch('/mark-all-read', authMiddleware(['Admin']), (req, res) => {
-  console.log("Mark all notifications as read route hit");
-  markAllNotificationsAsRead(req, res);
+// Mark all notifications as read
+router.patch('/mark-all-read', authMiddleware(), async (req, res) => {
+  try {
+    await Notification.updateMany(
+      { user: req.user.id, status: { $ne: "Read" } },
+      { $set: { status: "Read" } }
+    );
+    
+    res.json({ message: 'All notifications marked as read' });
+  } catch (error) {
+    console.error('❌ Mark All Read Error:', error.message);
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
 });
 
 export default router;

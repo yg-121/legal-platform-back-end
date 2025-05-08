@@ -21,7 +21,8 @@ import {
   getPendingReviews,
   updateClientProfileWithUpload,
   changeClientPassword,
-  changeLawyerPassword 
+  changeLawyerPassword,
+  getClientProfileMe
 } from '../controllers/userController.js';
 
 const router = express.Router();
@@ -47,5 +48,6 @@ router.get('/lawyers', authMiddleware(['Client']), getLawyers);
 router.get('/lawyers/:lawyerId', getLawyerProfile);
 router.get('/dashboard/client', authMiddleware(['Client']), getClientDashboard);
 router.get('/dashboard/lawyer', authMiddleware(['Lawyer']), getLawyerDashboard);
+router.get('/clients/me', authMiddleware(['Client']), getClientProfileMe);
 
 export default router;

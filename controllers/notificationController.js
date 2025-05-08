@@ -1,6 +1,7 @@
 import Notification from "../models/Notification.js";
 import User from "../models/User.js";
 import Case from "../models/Case.js";
+import { io } from "../socket.js";
 
 // Add this function to get admin notifications
 export const getNotifications = async (req, res) => {
@@ -56,17 +57,24 @@ export const getAdminStats = async (req, res) => {
 export const markNotificationAsRead = async (req, res) => {
   try {
     const { notificationId } = req.params;
+    
     const notification = await Notification.findById(notificationId);
-    if (!notification) return res.status(404).json({ message: "Notification not found" });
-    if (!notification.isAdminNotification || req.user.role !== "Admin") {
-      return res.status(403).json({ message: "Unauthorized" });
+    if (!notification) {
+      return res.status(404).json({ message: 'Notification not found' });
     }
-    notification.status = "Read";
+    
+    // Check if the notification belongs to the user
+    if (notification.user.toString() !== req.user.id) {
+      return res.status(403).json({ message: 'Unauthorized' });
+    }
+    
+    notification.status = 'Read';
     await notification.save();
-    res.json({ message: "Notification marked as read", notification });
+    
+    res.json({ message: 'Notification marked as read', notification });
   } catch (error) {
-    console.error("❌ Mark Notification Read Error:", error.message);
-    res.status(500).json({ message: "Server Error", error: error.message });
+    console.error('❌ Mark Notification Error:', error.message);
+    res.status(500).json({ message: 'Server Error', error: error.message });
   }
 };
 
@@ -92,5 +100,27 @@ export const markAllNotificationsAsRead = async (req, res) => {
   } catch (error) {
     console.error("❌ Mark All Notifications Read Error:", error);
     res.status(500).json({ message: "Server Error", error: error.message });
+  }
+};
+
+export const sendNotification = async (userId, message, type, data = {}) => {
+  try {
+    const notification = new Notification({
+      user: userId,
+      message,
+      type,
+      data,
+      status: 'Unread'
+    });
+    
+    await notification.save();
+    
+    // Emit to the user's specific room
+    io.to(`user:${userId}`).emit('new_notification', notification);
+    
+    return notification;
+  } catch (error) {
+    console.error('❌ Send Notification Error:', error.message);
+    return null;
   }
 };
