@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Socket.io Test</title>
+  <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const token = prompt('Enter your JWT token:');
+      if (!token) {
+        document.getElementById('status').textContent = 'No token provided';
+        return;
+      }
+      
+      const socket = io('http://localhost:5000', {
+        auth: { token }
+      });
+      
+      socket.on('connect', () => {
+        document.getElementById('status').textContent = 'Connected: ' + socket.id;
+        document.getElementById('status').style.color = 'green';
+      });
+      
+      socket.on('connect_error', (err) => {
+        document.getElementById('status').textContent = 'Connection Error: ' + err.message;
+        document.getElementById('status').style.color = 'red';
+        console.error('Connection Error:', err);
+      });
+      
+      socket.on('disconnect', (reason) => {
+        document.getElementById('status').textContent = 'Disconnected: ' + reason;
+        document.getElementById('status').style.color = 'orange';
+      });
+    });
+  </script>
+</head>
+<body>
+  <h1>Socket.io Connection Test</h1>
+  <div id="status">Connecting...</div>
+</body>
+</html>

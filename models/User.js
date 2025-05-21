@@ -12,10 +12,10 @@ const UserSchema = new mongoose.Schema({
   license_file: { type: String, required: function() { return this.role === 'Lawyer'; } },
   profile_photo: { type: String, required: false },
   specialization: {
-    type: [String], // Changed to array for multiple specializations
+    type: [String],
     enum: [
       'Criminal Law', 'Family Law', 'Corporate Law', 'Immigration', 'Personal Injury',
-      'Real Estate','Civil law','Marriage law', 'Intellectual Property', 'Employment Law', 'Bankruptcy', 'Tax Law'
+      'Real Estate', 'Civil law', 'Marriage law', 'Intellectual Property', 'Employment Law', 'Bankruptcy', 'Tax Law'
     ],
     required: function() { return this.role === 'Lawyer'; },
     default: []
@@ -29,7 +29,6 @@ const UserSchema = new mongoose.Schema({
   ratings: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Rating' }],
   averageRating: { type: Number, default: 0 },
   ratingCount: { type: Number, default: 0 },
-  // New fields for lawyer profiles
   yearsOfExperience: {
     type: Number,
     min: 0,
@@ -46,7 +45,9 @@ const UserSchema = new mongoose.Schema({
     enum: ['Pending', 'Verified', 'Rejected'],
     default: 'Pending',
     required: function() { return this.role === 'Lawyer'; }
-  }
+  },
+  // New field for blocked users
+  blockedUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
 }, { timestamps: true });
 
 UserSchema.pre('save', async function(next) {
