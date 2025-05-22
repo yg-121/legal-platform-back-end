@@ -1093,3 +1093,28 @@ export const getClientProfile = async (req, res) => {
     res.status(500).json({ message: 'Server Error', error: error.message });
   }
 };
+export const getClientsForLawyer = async (req, res) => {
+  try {
+    const lawyerId = req.user.id;
+
+    // Find cases where the lawyer is assigned
+    const cases = await Case.find({ assigned_lawyer: lawyerId }).select('client');
+
+    // Get unique client IDs
+    const clientIds = [...new Set(cases.map((c) => c.client.toString()))];
+
+    // Fetch client details
+    const clients = await User.find({
+      _id: { $in: clientIds },
+      role: 'Client',
+    }).select('username email _id');
+
+    res.json({
+      message: 'Clients fetched successfully',
+      clients,
+    });
+  } catch (error) {
+    console.error('❌ Fetch Clients for Lawyer Error:', error.message);
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};

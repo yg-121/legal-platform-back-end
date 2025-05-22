@@ -1,19 +1,51 @@
 import mongoose from 'mongoose';
 
-const ChatSchema = new mongoose.Schema({
-  sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  receiver: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  message: { type: String, required: false }, // Text message (optional if file/voice)
-  file: { 
-    type: String, 
-    required: false, 
-    enum: ['text', 'file', 'voice', null], // Type indicator (null if only text)
-    default: null 
+const ChatSchema = new mongoose.Schema(
+  {
+    sender: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
+    receiver: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
+    message: {
+      type: String,
+      trim: true,
+    },
+    fileUrl: {
+      type: String,
+      trim: true,
+    },
+    fileName: {
+      type: String,
+      trim: true,
+    },
+    fileType: {
+      type: String,
+      trim: true,
+    },
+    read: {
+      type: Boolean,
+      default: false,
+    },
   },
-  filePath: { type: String, required: false }, // Store file path separately
-  case: { type: mongoose.Schema.Types.ObjectId, ref: 'Case', required: false },
-  read: { type: Boolean, default: false },
-  createdAt: { type: Date, default: Date.now },
+  { timestamps: true }
+);
+
+// Prevent sender and receiver from being the same
+ChatSchema.pre('save', function (next) {
+  if (this.sender.toString() === this.receiver.toString()) {
+    return next(new Error('Sender and receiver cannot be the same'));
+  }
+  next();
 });
+
+// Indexes for efficient queries
+ChatSchema.index({ sender: 1 });
+ChatSchema.index({ receiver: 1 });
 
 export default mongoose.model('Chat', ChatSchema);
