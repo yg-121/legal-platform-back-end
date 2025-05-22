@@ -1,4 +1,3 @@
-// This file exports the Socket.IO instance to avoid circular dependencies
 import { Server } from 'socket.io';
 import http from 'http';
 import express from 'express';
@@ -20,11 +19,11 @@ const io = new Server(server, {
 });
 
 // Set up connection handler
-io.on('connection', (socket) => {
+io.on('connectionA', (socket) => {
   console.log('Client connected:', socket.id);
   
-  // Get the user ID from the query parameters
-  const userId = socket.handshake.query.userId;
+  // Get the user ID from the auth object (consistent with index.js)
+  const userId = socket.handshake.auth.userId;
   if (userId) {
     // Join a room specific to this user
     socket.join(`user:${userId}`);

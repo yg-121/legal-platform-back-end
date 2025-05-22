@@ -48,29 +48,22 @@ const io = new Server(server, {
 
 io.use((socket, next) => {
   const { token, userId } = socket.handshake.auth;
+  console.log('Socket Auth Attempt:', { token, userId }); // Add logging
   if (!token || !userId) {
-    if (process.env.NODE_ENV === 'development') {
-      console.error('Socket Auth Error: Missing token or userId');
-    }
+    console.error('Socket Auth Error: Missing token or userId', { token, userId });
     return next(new Error('Authentication error: Missing token or userId'));
   }
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    if (process.env.NODE_ENV === 'development') {
-      console.log('Socket Auth Decoded:', decoded);
-    }
+    console.log('Socket Auth Decoded:', decoded); // Log decoded token
     if (decoded.id !== userId) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Socket Auth Error: Invalid userId');
-      }
+      console.error('Socket Auth Error: Invalid userId', { decodedId: decoded.id, userId });
       return next(new Error('Authentication error: Invalid userId'));
     }
     socket.user = decoded;
     next();
   } catch (error) {
-    if (process.env.NODE_ENV === 'development') {
-      console.error('Socket Auth Error:', error.message);
-    }
+    console.error('Socket Auth Error:', error.message);
     return next(new Error('Authentication error: Invalid token'));
   }
 });
