@@ -37,7 +37,6 @@ export const registerUser = async (req, res) => {
     const userExists = await User.findOne({ email });
     if (userExists) return res.status(400).json({ message: "Email already exists" });
 
-    // Process specialization for Postman (handles string or array)
     let specializationArray;
     if (role === "Lawyer") {
       if (Array.isArray(specialization)) {
@@ -46,11 +45,10 @@ export const registerUser = async (req, res) => {
         specializationArray = specialization.split(',').map(s => s.trim());
       } else {
         return res.status(400).json({
-          message: "Specialization must be a string (e.g., 'Family Law, Criminal Law') or an array (e.g., ['Family Law', 'Criminal Law'])"
+          message: "Specialization must be a string or an array"
         });
       }
 
-      // Validate against enum
       const validSpecializations = [
         'Criminal Law', 'Family Law', 'Corporate Law', 'Immigration', 'Personal Injury',
         'Real Estate', 'Intellectual Property', 'Employment Law', 'Bankruptcy', 'Tax Law'
@@ -58,7 +56,7 @@ export const registerUser = async (req, res) => {
       const invalidSpecializations = specializationArray.filter(s => !validSpecializations.includes(s));
       if (invalidSpecializations.length > 0) {
         return res.status(400).json({
-          message: `Invalid specialization values: ${invalidSpecializations.join(', ')}. Valid options: ${validSpecializations.join(', ')}`
+          message: `Invalid specialization values: ${invalidSpecializations.join(', ')}`
         });
       }
     }
@@ -81,7 +79,6 @@ export const registerUser = async (req, res) => {
     await newUser.save();
 
     if (role === "Lawyer") {
-      // Use sendNotification to notify LegalReviewers
       await sendNotification(
         null,
         `New lawyer registered: ${username} (${newUser.specialization.join(', ')})`,
@@ -89,14 +86,19 @@ export const registerUser = async (req, res) => {
       );
     }
 
-    res.status(201).json({
+    const userData = {
       _id: newUser._id,
       username: newUser.username,
       email: newUser.email,
       role: newUser.role,
       status: newUser.status,
-      license_file: newUser.license_file,
-      token: generateToken(newUser),
+      license_file: newUser.license_file
+    };
+    res.status(201).json({
+      data: {
+        user: userData,
+        token: generateToken(newUser),
+      }
     });
   } catch (error) {
     console.error("❌ Registration Error:", error.message);
@@ -126,14 +128,19 @@ export const loginUser = async (req, res) => {
       return res.status(403).json({ message: `Account is ${user.status}. Please register again with a valid license.` });
     }
 
-    res.json({
+    const userData = {
       _id: user._id,
       username: user.username,
       email: user.email,
       role: user.role,
       status: user.status,
-      license_file: user.license_file,
-      token: generateToken(user),
+      license_file: user.license_file
+    };
+    res.json({
+      data: {
+        user: userData,
+        token: generateToken(user),
+      }
     });
   } catch (error) {
     console.error("❌ Login Error:", error.message);
@@ -209,6 +216,30 @@ export const resetPassword = async (req, res) => {
     res.json({ message: "Password reset successfully" });
   } catch (error) {
     console.error("❌ Password Reset Error:", error.message);
+    res.status(500).json({ message: "Server Error", error: error.message });
+  }
+};
+
+export const verifyToken = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('_id username role status email license_file');
+    if (!user) {
+      return res.status(401).json({ message: "User not found" });
+    }
+    res.json({
+      data: {
+        user: {
+          _id: user._id,
+          username: user.username,
+          email: user.email,
+          role: user.role,
+          status: user.status,
+          license_file: user.license_file
+        }
+      }
+    });
+  } catch (error) {
+    console.error("❌ Verify Token Error:", error.message);
     res.status(500).json({ message: "Server Error", error: error.message });
   }
 };
