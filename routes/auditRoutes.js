@@ -4,7 +4,7 @@ import { getAuditLogs } from '../controllers/auditController.js';
 
 const router = express.Router();
 
-router.get('/audit', authMiddleware(['Admin']), (req, res, next) => {
+router.get('/', authMiddleware(['Admin']), (req, res, next) => {
   console.log("Audit route hit with user:", req.user);
   next();
 }, getAuditLogs);
