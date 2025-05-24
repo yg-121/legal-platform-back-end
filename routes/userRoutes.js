@@ -22,7 +22,8 @@ import {
   updateClientProfileWithUpload,
   changeClientPassword,
   changeLawyerPassword,
-  getClientProfileMe
+  getClientProfileMe,
+  getUserById
 } from '../controllers/userController.js';
 
 const router = express.Router();
@@ -49,5 +50,8 @@ router.get('/lawyers/:lawyerId', getLawyerProfile);
 router.get('/dashboard/client', authMiddleware(['Client']), getClientDashboard);
 router.get('/dashboard/lawyer', authMiddleware(['Lawyer']), getLawyerDashboard);
 router.get('/clients/me', authMiddleware(['Client']), getClientProfileMe);
+
+// New route for admin to get detailed user information by ID
+router.get('/:userId/details', authMiddleware(['Admin']), getUserById);
 
 export default router;

@@ -257,11 +257,11 @@ export const updateLawyerProfile = async (req, res) => {
 
     if (profilePhoto) {
       if (user.profile_photo) {
-        const oldPhotoPath = path.join(__dirname, '../Uploads/profiles', user.profile_photo);
-        if (fs.existsSync(oldPhotoPath)) {
-          fs.unlinkSync(oldPhotoPath);
-        }
+      const oldPhotoPath = path.join(__dirname, '../Uploads/profiles', user.profile_photo);
+      if (fs.existsSync(oldPhotoPath)) {
+        fs.unlinkSync(oldPhotoPath);
       }
+    }
       updatedFields.profile_photo = profilePhoto.filename;
     }
 
@@ -722,7 +722,7 @@ export const getLawyers = async (req, res) => {
     if (available) filters.isAvailable = available === 'true';
 
     const lawyers = await User.find(filters)
-      .select('username specialization location averageRating ratingCount hourlyRate profile_photo')
+      .select('username specialization location averageRating ratingCount hourlyRate profile_photo isAvailable verificationStatus role')
       .sort({ averageRating: -1 })
       .lean();
 
@@ -1128,6 +1128,80 @@ export const getClientProfileMe = async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Get Client Profile Error:', error.message);
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
+// Get user by ID (for admin view)
+export const getUserById = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Find the user by ID - make sure we select all needed fields
+    const user = await User.findById(userId).select('username email role status phone location profile_photo createdAt updatedAt specialization yearsOfExperience bio certifications hourlyRate languages averageRating ratingCount isAvailable verificationStatus');
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Prepare the response based on user role
+    let userDetails = { ...user.toObject() };
+    
+    // Remove sensitive information
+    delete userDetails.password;
+    delete userDetails.resetPasswordToken;
+    delete userDetails.resetPasswordExpires;
+    
+    // For lawyers, get additional information like cases, ratings, etc.
+    if (user.role === 'Lawyer') {
+      // Get lawyer's cases
+      const cases = await Case.find({ assigned_lawyer: userId }).select('title status createdAt');
+      
+      // Get lawyer's ratings
+      const ratings = await Rating.find({ lawyer: userId });
+      const averageRating = ratings.length > 0 
+        ? ratings.reduce((sum, rating) => sum + rating.rating, 0) / ratings.length 
+        : 0;
+      
+      // Get lawyer's appointments
+      const appointments = await Appointment.find({ lawyer: userId })
+        .select('title date status')
+        .sort({ date: -1 })
+        .limit(5);
+      
+      userDetails.cases = cases;
+      userDetails.ratings = {
+        average: averageRating,
+        count: ratings.length,
+        recent: ratings.slice(0, 5)
+      };
+      userDetails.appointments = appointments;
+    }
+    
+    // For clients, get their cases
+    if (user.role === 'Client') {
+      const cases = await Case.find({ client: userId }).select('title status createdAt');
+      userDetails.cases = cases;
+    }
+    
+    // For legal reviewers, get their assigned lawyers
+    if (user.role === 'LegalReviewer') {
+      const assignedLawyers = await User.find({ 
+        role: 'Lawyer', 
+        status: 'pending',
+        assignedReviewer: userId 
+      }).select('username email createdAt');
+      
+      userDetails.assignedLawyers = assignedLawyers;
+    }
+    
+    res.status(200).json({ 
+      success: true, 
+      user: userDetails 
+    });
+    
+  } catch (error) {
+    console.error('❌ Get User By ID Error:', error.message);
     res.status(500).json({ message: 'Server Error', error: error.message });
   }
 };
