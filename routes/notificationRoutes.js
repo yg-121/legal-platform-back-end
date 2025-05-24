@@ -10,6 +10,12 @@ import {
 
 const router = express.Router();
 
+// Get admin notifications
+router.get('/admin/notifications', authMiddleware(['Admin']), getNotifications);
+
+// Get admin stats
+router.get('/admin/stats', authMiddleware(['Admin']), getAdminStats);
+
 // Get user notifications
 router.get('/notifications', authMiddleware(), async (req, res) => {
   try {
@@ -45,18 +51,6 @@ router.get('/unread-count', authMiddleware(), async (req, res) => {
 });
 
 // Mark all notifications as read
-router.patch('/mark-all-read', authMiddleware(), async (req, res) => {
-  try {
-    await Notification.updateMany(
-      { user: req.user.id, status: { $ne: "Read" } },
-      { $set: { status: "Read" } }
-    );
-    
-    res.json({ message: 'All notifications marked as read' });
-  } catch (error) {
-    console.error('❌ Mark All Read Error:', error.message);
-    res.status(500).json({ message: 'Server Error', error: error.message });
-  }
-});
+router.patch('/mark-all-read', authMiddleware(), markAllNotificationsAsRead);
 
 export default router;
