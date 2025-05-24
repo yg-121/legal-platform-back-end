@@ -29,7 +29,7 @@ const router = express.Router();
 
 router.put('/approve-lawyer', authMiddleware(['LegalReviewer']), approveLawyer);
 router.put('/reject-lawyer', authMiddleware(['LegalReviewer']), rejectLawyer);
-router.put('/lawyer/profile', authMiddleware(['Lawyer']), updateLawyerProfileWithUpload);
+router.patch('/lawyer/profile', authMiddleware(['Lawyer']), updateLawyerProfileWithUpload);
 router.put('/admin/profile', authMiddleware(['Admin']), updateAdminProfileWithUpload);
 router.put('/client/profile', authMiddleware(['Client']), updateClientProfileWithUpload);
 router.get('/client/profile', authMiddleware(['Client']), getClientProfile);

@@ -266,18 +266,46 @@ export const updateLawyerProfile = async (req, res) => {
     }
 
     if (specialization) {
-      const specializations = Array.isArray(specialization) ? specialization : [specialization];
+      const specializations = Array.isArray(specialization)
+        ? specialization
+        : [specialization];
+
       const validSpecializations = [
-        'Criminal Law', 'Family Law', 'Corporate Law', 'Immigration', 'Personal Injury',
-        'Real Estate', 'Civil law', 'Marriage law', 'Intellectual Property', 'Employment Law',
-        'Bankruptcy', 'Tax Law'
+        "Criminal Law",
+        "Family Law",
+        "Corporate Law",
+        "Immigration",
+        "Personal Injury",
+        "Real Estate",
+        "Civil law",
+        "Marriage law",
+        "Intellectual Property",
+        "Employment Law",
+        "Bankruptcy",
+        "Tax Law",
       ];
-      if (!specializations.every(spec => validSpecializations.includes(spec))) {
-        return res.status(400).json({ message: 'Invalid specialization' });
+
+      const isValid = specializations.every((spec) =>
+        validSpecializations.includes(spec)
+      );
+      if (!isValid) {
+        return res.status(400).json({ message: "Invalid specialization" });
       }
-      updatedFields.specialization = specializations;
-      requiresReverification = true;
+
+      // Compare with previous specialization
+      const currentSpecs = Array.isArray(user.specialization)
+        ? user.specialization
+        : [user.specialization || ""];
+      const isDifferent =
+        specializations.length !== currentSpecs.length ||
+        !specializations.every((spec) => currentSpecs.includes(spec));
+
+      if (isDifferent) {
+        updatedFields.specialization = specializations;
+        requiresReverification = true;
+      }
     }
+    
 
     if (location) {
       updatedFields.location = location;
@@ -371,12 +399,14 @@ export const updateLawyerProfile = async (req, res) => {
         console.log(`✅ Admin notification email sent to ${admin.email}`);
       }
     }
-
-    res.json({ message: 'Lawyer profile updated successfully', user: updatedUser });
+    res.json({ message: 'Lawyer profile updated successfully', lawyer: updatedUser });
   } catch (error) {
     console.error('❌ Update Lawyer Profile Error:', error.message);
     res.status(500).json({ message: 'Server Error', error: error.message });
   }
+
+
+  
 };
 
 export const updateLawyerProfileWithUpload = [profileUpload, updateLawyerProfile];
